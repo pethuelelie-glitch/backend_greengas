@@ -31,6 +31,7 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = [
+    'jazzmin',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -164,4 +165,89 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
 ]
 CORS_ALLOW_ALL_ORIGINS = DEBUG
+
+
+# ==============================================================================
+# CONFIGURATION JAZZMIN DASHBOARD ADMIN
+# ==============================================================================
+JAZZMIN_SETTINGS = {
+    "site_title": "GREENGAS Admin",
+    "site_header": "GREENGAS",
+    "site_brand": "GREENGAS 🌿",
+    "welcome_sign": "Plateforme d'Administration GREENGAS (SIREXE 2026)",
+    "copyright": "GREENGAS · Équipe DEDSEC",
+    "search_model": ["comptes.Utilisateur", "referentiel.Bac"],
+    "topmenu_links": [
+        {"name": "Accueil", "url": "admin:index", "permissions": ["auth.view_user"]},
+    ],
+    "usermenu_links": [
+        {"model": "comptes.Utilisateur"},
+    ],
+    "show_sidebar": True,
+    "navigation_expanded": True,
+    "order_with_respect_to": [
+        "comptes",
+        "referentiel",
+        "collecte",
+        "tri",
+        "greenpoints",
+        "energie",
+        "supervision",
+    ],
+    "icons": {
+        "auth": "fas fa-users-cog",
+        "comptes.Utilisateur": "fas fa-users",
+        "referentiel.Site": "fas fa-industry",
+        "referentiel.Secteur": "fas fa-map-marked-alt",
+        "referentiel.Bac": "fas fa-trash-alt",
+        "collecte.Tournee": "fas fa-truck",
+        "collecte.Collecte": "fas fa-weight-hanging",
+        "collecte.Scan": "fas fa-qrcode",
+        "tri.LotTrie": "fas fa-boxes",
+        "greenpoints.GreenPointsTransaction": "fas fa-coins",
+        "greenpoints.Recompense": "fas fa-gift",
+        "greenpoints.Echange": "fas fa-exchange-alt",
+        "energie.ProductionEnergie": "fas fa-bolt",
+        "energie.Alerte": "fas fa-exclamation-triangle",
+        "supervision.Parametre": "fas fa-sliders-h",
+        "supervision.JournalAudit": "fas fa-history",
+    },
+    "default_icon_parents": "fas fa-chevron-circle-right",
+    "default_icon_children": "fas fa-circle",
+    "related_modal_active": True,
+    "show_ui_builder": False,
+    "changeform_format": "horizontal_tabs",
+}
+
+JAZZMIN_UI_TWEAKS = {
+    "navbar_small_text": False,
+    "footer_small_text": False,
+    "body_small_text": False,
+    "brand_small_text": False,
+    "brand_colour": "navbar-success",
+    "accent": "accent-success",
+    "navbar": "navbar-success navbar-dark",
+    "no_navbar_border": False,
+    "navbar_fixed": True,
+    "layout_boxed": False,
+    "footer_fixed": False,
+    "sidebar_fixed": True,
+    "sidebar": "sidebar-dark-success",
+    "sidebar_nav_small_text": False,
+    "sidebar_disable_expand": False,
+    "sidebar_nav_child_indent": True,
+    "sidebar_nav_compact_style": False,
+    "sidebar_nav_legacy_style": False,
+    "sidebar_nav_flat_style": False,
+    "theme": "flatly",
+    "dark_mode_theme": "darkly",
+    "button_classes": {
+        "primary": "btn-success",
+        "secondary": "btn-secondary",
+        "info": "btn-info",
+        "warning": "btn-warning",
+        "danger": "btn-danger",
+        "success": "btn-success",
+    },
+}
 
