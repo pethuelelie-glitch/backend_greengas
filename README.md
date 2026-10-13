@@ -124,32 +124,7 @@ Le serveur est accessible sur : `http://localhost:8000/api/v1/`
 
 ---
 
-## 👥 Jeu de Données de Démonstration (SIREXE 2026)
-
-Tous les comptes de test partagent le mot de passe universel : **`greengas2026`**.
-
-| Compte | Rôle (`role`) | Téléphone (Identifiant) | Application associée |
-|---|---|---|---|
-| **Admin Démo** | `administrateur` | `+2250700000001` | Control Center |
-| **Kouadio Collecteur** | `collecteur` | `+2250700000002` | App Flutter (Collecte) |
-| **Aya Opératrice** | `operateur_tri` | `+2250700000003` | Control Center (Tri) |
-| **Serge Méthanisation** | `responsable_methanisation` | `+2250700000004` | Control Center (Énergie) |
-| **Référent Atlantic** | `referent` | `+2250700000005` | Control Center (Bac BAC-014) |
-| **Simulateur IoT** | `capteur` | `+2250700000006` | Backend / API technique |
-| **Awa Koné** | `citoyen` (validé) | `+2250701020304` | App Flutter (Citoyen) |
-| **Koffi Yao** | `citoyen` (validé) | `+2250701020305` | App Flutter (Citoyen) |
-| **Mariam Traoré** | `citoyen` (validé) | `+2250701020306` | App Flutter (Citoyen) |
-| **Yao N'Guessan** | `citoyen` (validé) | `+2250701020307` | App Flutter (Citoyen) |
-| **Fatou Diabaté** | `citoyen` (*en attente*) | `+2250701020308` | App Flutter (Citoyen) |
-
-### Sites & Secteurs de référence
-- **Secteur NORD** $\rightarrow$ Site normal : `DIG-01` (repli : `DIG-02`)
-- **Secteur EST** $\rightarrow$ Site normal : `DIG-02` (repli : `DIG-03`)
-- **Secteur OUEST** $\rightarrow$ Site normal : `DIG-03` (repli : `DIG-01`)
-
----
-
-## 📐 Règles et Formules Métier
+##  Règles et Formules Métier
 
 ### 1. Scan Citoyen
 - **Contrôle d'accès** : Compte validé obligatoire (`COMPTE_NON_VALIDE`).
@@ -182,7 +157,7 @@ Tous les comptes de test partagent le mot de passe universel : **`greengas2026`*
 
 ---
 
-## 📡 Conventions de l'API REST
+##  Conventions de l'API REST
 
 - **Préfixe global** : `/api/v1/`
 - **Barre oblique finale** : Toujours obligatoire (ex: `/api/v1/bacs/`)
@@ -201,17 +176,6 @@ Tous les comptes de test partagent le mot de passe universel : **`greengas2026`*
   }
   ```
 
----
-
-## 📅 Calendrier d'Intégration (Hackathon SIREXE 2026)
-
-| Semaine | Objectif Backend | Test commun équipe |
-|---|---|---|
-| **13 → 19 oct** | Socle, Modèles, Migrations, Seed de démo, Authentification JWT | Connexion des 3 apps avec les comptes de démo |
-| **20 → 26 oct** | Référentiel, Scans géolocalisés, Tournées, Simulateur pesée | Parcours citoyen (scan) $\rightarrow$ Tournée `collectee` |
-| **27 oct → 2 nov** | Pipeline de tri atomique, GreenPoints, Dashboard Énergie, Alertes | Déroulé de la chaîne complète de bout en bout |
-| **3 → 9 nov** | Traçabilité de bout en bout, Journal d'audit, Paramètres, Scénario démo | Répétition de la démo chronométrée pour le jury |
-| **10 → 17 nov** | Ajustements, optimisations, répétition générale | Répétition finale |
 
 ---
 
