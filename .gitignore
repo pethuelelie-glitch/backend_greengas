@@ -1,0 +1,83 @@
+# ==========================================
+# Python Byte-Compiled / Cache Files
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# ==========================================
+# Django Specific Artifacts
+# ==========================================
+*.log
+*.pot
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# If you use a build or CI process to run 'collectstatic', 
+# you should uncomment the next line to ignore your static root folder:
+# staticfiles/
+
+# Core user-uploaded media directory
+media/
+
+# ==========================================
+# Environments & Credentials (CRITICAL)
+# ==========================================
+# Never commit your secrets or raw environment setups!
+.env
+.secrets
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# ==========================================
+# Distribution, Packaging, & System Build
+# ==========================================
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ==========================================
+# Testing & Code Coverage
+# ==========================================
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.mo
+.pytest_cache/
+
+# ==========================================
+# IDEs, Text Editors, & OS Files
+# ==========================================
+# JetBrains / PyCharm
+.idea/
+
+# Visual Studio Code
+.vscode/
+
+# Local OS overrides
+.DS_Store
+Thumbs.db
