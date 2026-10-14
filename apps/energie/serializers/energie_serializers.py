@@ -1,3 +1,4 @@
+from decimal import Decimal
 from rest_framework import serializers
 from apps.energie.models import (
     ProductionEnergie,
@@ -78,8 +79,8 @@ class ProductionGlobaleSerializer(serializers.Serializer):
 
 class MesureSiteSerializer(serializers.Serializer):
     date = serializers.DateField()
-    biogaz_mesure_m3 = serializers.DecimalField(max_digits=9, decimal_places=2, min_value=0)
-    ch4_pct = serializers.DecimalField(max_digits=5, decimal_places=2, min_value=0, max_value=100)
+    biogaz_mesure_m3 = serializers.DecimalField(max_digits=9, decimal_places=2, min_value=Decimal('0'))
+    ch4_pct = serializers.DecimalField(max_digits=5, decimal_places=2, min_value=Decimal('0'), max_value=Decimal('100'))
     temperature_c = serializers.DecimalField(max_digits=5, decimal_places=2, required=False, allow_null=True)
     ph = serializers.DecimalField(max_digits=4, decimal_places=2, required=False, allow_null=True)
     source = serializers.ChoiceField(choices=['simule', 'capteur'])

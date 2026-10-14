@@ -1,3 +1,4 @@
+from decimal import Decimal
 from rest_framework import serializers
 from apps.simulateur.models import ScenarioSimulation
 from apps.referentiel.models import Site
@@ -11,8 +12,8 @@ class ScenarioSimulationSerializer(serializers.ModelSerializer):
     facteur_mesure = serializers.DecimalField(
         max_digits=4,
         decimal_places=2,
-        min_value=0,
-        max_value=2
+        min_value=Decimal('0'),
+        max_value=Decimal('2')
     )
 
     class Meta:
