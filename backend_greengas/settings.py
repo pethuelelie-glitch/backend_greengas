@@ -106,13 +106,31 @@ WSGI_APPLICATION = 'backend_greengas.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DB_ENGINE = os.environ.get('DB_ENGINE', 'mysql').lower()
+DB_ENGINE = os.environ.get('DB_ENGINE', 'sqlite3' if DEBUG else '').lower()
+SUPPORTED_DB_ENGINES = {'sqlite3', 'mysql', 'postgresql', 'postgres'}
+if DB_ENGINE not in SUPPORTED_DB_ENGINES:
+    raise ValueError("DB_ENGINE doit être défini explicitement à sqlite3, mysql ou postgresql.")
+if not DEBUG and DB_ENGINE == 'sqlite3':
+    raise ValueError("SQLite est réservé au développement et aux tests, pas à la production.")
+
+if not DEBUG:
+    required_db_settings = ('DB_NAME', 'DB_USER', 'DB_PASSWORD', 'DB_HOST')
+    missing_db_settings = [name for name in required_db_settings if not os.environ.get(name)]
+    if missing_db_settings:
+        raise ValueError(
+            "Configuration de base de données incomplète en production : "
+            + ', '.join(missing_db_settings)
+        )
+
+DB_CONN_MAX_AGE = int(os.environ.get('DB_CONN_MAX_AGE', '60' if not DEBUG else '0'))
+DB_CONN_HEALTH_CHECKS = env_bool('DB_CONN_HEALTH_CHECKS', not DEBUG)
 
 if DB_ENGINE == 'sqlite3':
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
             'NAME': BASE_DIR / 'db.sqlite3',
+            'CONN_MAX_AGE': DB_CONN_MAX_AGE,
         }
     }
 elif DB_ENGINE in ['postgresql', 'postgres']:
@@ -120,10 +138,12 @@ elif DB_ENGINE in ['postgresql', 'postgres']:
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
             'NAME': os.environ.get('DB_NAME', 'db_greengas'),
-            'USER': os.environ.get('DB_USER', 'postgres'),
-            'PASSWORD': os.environ.get('DB_PASSWORD', 'postgres'),
-            'HOST': os.environ.get('DB_HOST', '127.0.0.1'),
+            'USER': os.environ.get('DB_USER', 'postgres' if DEBUG else ''),
+            'PASSWORD': os.environ.get('DB_PASSWORD', 'postgres' if DEBUG else ''),
+            'HOST': os.environ.get('DB_HOST', '127.0.0.1' if DEBUG else ''),
             'PORT': os.environ.get('DB_PORT', '5432'),
+            'CONN_MAX_AGE': DB_CONN_MAX_AGE,
+            'CONN_HEALTH_CHECKS': DB_CONN_HEALTH_CHECKS,
         }
     }
 else:
@@ -131,10 +151,12 @@ else:
         'default': {
             'ENGINE': 'django.db.backends.mysql',
             'NAME': os.environ.get('DB_NAME', 'db_greengas'),
-            'USER': os.environ.get('DB_USER', 'root'),
+            'USER': os.environ.get('DB_USER', 'root' if DEBUG else ''),
             'PASSWORD': os.environ.get('DB_PASSWORD', ''),
-            'HOST': os.environ.get('DB_HOST', '127.0.0.1'),
+            'HOST': os.environ.get('DB_HOST', '127.0.0.1' if DEBUG else ''),
             'PORT': os.environ.get('DB_PORT', '3306'),
+            'CONN_MAX_AGE': DB_CONN_MAX_AGE,
+            'CONN_HEALTH_CHECKS': DB_CONN_HEALTH_CHECKS,
             'OPTIONS': {
                 'charset': 'utf8mb4',
                 'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
@@ -231,11 +253,16 @@ CSRF_TRUSTED_ORIGINS = [
 ]
 
 SECURE_SSL_REDIRECT = env_bool('SECURE_SSL_REDIRECT', not DEBUG)
+SECURE_PROXY_SSL_HEADER = (
+    ('HTTP_X_FORWARDED_PROTO', 'https')
+    if env_bool('TRUST_X_FORWARDED_PROTO', False)
+    else None
+)
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
 SECURE_HSTS_SECONDS = int(os.environ.get('SECURE_HSTS_SECONDS', '31536000' if not DEBUG else '0'))
-SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
-SECURE_HSTS_PRELOAD = not DEBUG
+SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool('SECURE_HSTS_INCLUDE_SUBDOMAINS', False)
+SECURE_HSTS_PRELOAD = env_bool('SECURE_HSTS_PRELOAD', False)
 
 
 # ==============================================================================
