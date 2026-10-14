@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: GREENGAS API
-  version: 1.6.0
+  version: 1.6.1
   description: |
     Contrat d'API commun de GREENGAS (SIREXE Hackathon 2026, équipe DEDSEC).
     Ce fichier fait foi pour le backend Django, l'application Flutter et le Control Center (React / Electron).
@@ -496,7 +496,7 @@ paths:
     get:
       operationId: bacs_tracabilite
       tags: [Supervision]
-      summary: Historique complet d'un bac (écran de traçabilité du Control Center)
+      summary: Historique complet d'un bac (administrateur ou référent affecté à ce bac)
       responses:
         '200':
           description: Traçabilité
@@ -504,13 +504,14 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/TracabiliteBac' }
         '404': { $ref: '#/components/responses/Introuvable' }
+        '403': { $ref: '#/components/responses/AccesRefuse' }
 
   # ------------------------------------------------------------------- SCANS
   /scans/:
     get:
       operationId: scans_lister
       tags: [Scans]
-      summary: Lister les scans (un citoyen ne voit que les siens)
+      summary: Lister les scans (citoyen propriétaire, collecteur affecté, référent du bac ou administrateur)
       parameters:
         - { $ref: '#/components/parameters/Page' }
         - { $ref: '#/components/parameters/TaillePage' }
@@ -765,7 +766,7 @@ paths:
     get:
       operationId: tournees_tri_lire
       tags: [Tri]
-      summary: Résultat du tri d'une tournée
+      summary: Résultat du tri d'une tournée (opérateur de tri ou administrateur)
       responses:
         '200':
           description: Résultat
@@ -773,6 +774,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ResultatTri' }
         '404': { $ref: '#/components/responses/Introuvable' }
+        '403': { $ref: '#/components/responses/AccesRefuse' }
     post:
       operationId: tournees_tri_valider
       tags: [Tri]
@@ -799,7 +801,7 @@ paths:
     get:
       operationId: lots_lister
       tags: [Tri]
-      summary: Lister les lots triés
+      summary: Lister les lots triés (opérateur de tri ou administrateur)
       parameters:
         - { $ref: '#/components/parameters/Page' }
         - { $ref: '#/components/parameters/TaillePage' }
@@ -953,7 +955,7 @@ paths:
     get:
       operationId: productions_lister
       tags: [Énergie]
-      summary: Productions journalières par site
+      summary: Productions journalières par site (administrateur ou responsable méthanisation)
       parameters:
         - { $ref: '#/components/parameters/Page' }
         - { $ref: '#/components/parameters/TaillePage' }
@@ -976,7 +978,7 @@ paths:
     get:
       operationId: productions_globale
       tags: [Énergie]
-      summary: Agrégat des 3 sites pour une date (vue globale)
+      summary: Agrégat des sites pour une date (administrateur ou responsable méthanisation)
       parameters:
         - { name: date, in: query, required: true, schema: { type: string, format: date } }
       responses:
@@ -991,7 +993,7 @@ paths:
     get:
       operationId: productions_detail
       tags: [Énergie]
-      summary: Détail d'une production journalière
+      summary: Détail d'une production journalière (administrateur ou responsable méthanisation)
       responses:
         '200':
           description: Production
@@ -1027,7 +1029,7 @@ paths:
     get:
       operationId: alertes_lister
       tags: [Alertes]
-      summary: Lister les alertes
+      summary: Lister les alertes (administrateur ou responsable méthanisation)
       parameters:
         - { $ref: '#/components/parameters/Page' }
         - { $ref: '#/components/parameters/TaillePage' }
@@ -1051,7 +1053,7 @@ paths:
     get:
       operationId: alertes_detail
       tags: [Alertes]
-      summary: Détail d'une alerte
+      summary: Détail d'une alerte (administrateur ou responsable méthanisation)
       responses:
         '200':
           description: Alerte
@@ -1101,7 +1103,7 @@ paths:
     get:
       operationId: parametres_lister
       tags: [Supervision]
-      summary: Table des paramètres système (non paginée)
+      summary: Table des paramètres système (administrateur)
       responses:
         '401': { $ref: '#/components/responses/NonAuthentifie' }
         '200':

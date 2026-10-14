@@ -133,6 +133,10 @@ class SupervisionEndpointsTestCase(TestCase):
         self.assertIsNotNone(entree)
         self.assertEqual(entree.motif, "Revalorisation temporaire de la filière organique")
 
+        self.client.force_authenticate(user=self.collecteur)
+        res_collecteur = self.client.get("/api/v1/parametres/")
+        self.assertEqual(res_collecteur.status_code, status.HTTP_403_FORBIDDEN)
+
     def test_journal_audit_lister(self):
         self.client.force_authenticate(user=self.admin)
         # Créer une entrée d'audit manuelle
@@ -157,6 +161,18 @@ class SupervisionEndpointsTestCase(TestCase):
         self.assertIn('historique', res.data)
         self.assertEqual(len(res.data['historique']), 1)
         self.assertEqual(res.data['historique'][0]['collecte']['code_bac'], "BAC-014")
+
+        referent = Utilisateur.objects.create_user(
+            telephone="+2250100000098", nom="Référent", password="password123",
+            role=Role.REFERENT, bac=self.bac,
+        )
+        self.client.force_authenticate(user=referent)
+        res_referent = self.client.get(f"/api/v1/bacs/{self.bac.id}/tracabilite/")
+        self.assertEqual(res_referent.status_code, status.HTTP_200_OK)
+
+        self.client.force_authenticate(user=self.collecteur)
+        res_collecteur = self.client.get(f"/api/v1/bacs/{self.bac.id}/tracabilite/")
+        self.assertEqual(res_collecteur.status_code, status.HTTP_403_FORBIDDEN)
 
 
 class NotificationEndpointsTestCase(TestCase):

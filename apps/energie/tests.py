@@ -84,6 +84,14 @@ class EnergieEndpointsTestCase(TestCase):
         self.assertEqual(len(response.data['results']), 1)
         self.assertEqual(response.data['results'][0]['code_site'], 'DIG-01')
 
+    def test_productions_refusees_aux_citoyens(self):
+        self.client.force_authenticate(user=self.citoyen_user)
+        response = self.client.get('/api/v1/productions/')
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+        response_globale = self.client.get('/api/v1/productions/globale/?date=2026-09-12')
+        self.assertEqual(response_globale.status_code, status.HTTP_403_FORBIDDEN)
+
     def test_productions_list_filters(self):
         self.client.force_authenticate(user=self.admin_user)
         # Filtrer par site_id
@@ -252,3 +260,7 @@ class EnergieEndpointsTestCase(TestCase):
             format='json'
         )
         self.assertEqual(res_again.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+        self.client.force_authenticate(user=self.citoyen_user)
+        res_citoyen = self.client.get('/api/v1/alertes/')
+        self.assertEqual(res_citoyen.status_code, status.HTTP_403_FORBIDDEN)

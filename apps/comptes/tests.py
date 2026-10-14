@@ -261,7 +261,7 @@ class ComptesEndpointsTestCase(TestCase):
         # Vérification OpenAPI 1.5.0
         res_schema = self.client.get("/api/schema/")
         self.assertEqual(res_schema.status_code, status.HTTP_200_OK)
-        self.assertEqual(res_schema.json()['info']['version'], "1.6.0")
+        self.assertEqual(res_schema.json()['info']['version'], "1.6.1")
 
         res_docs = self.client.get("/api/docs/")
         self.assertEqual(res_docs.status_code, status.HTTP_200_OK)
