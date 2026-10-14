@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
+from django.utils import timezone
 
 from apps.comptes.models import Utilisateur, CodeOTP, Role, StatutValidation
 from apps.comptes.permissions import EstAdmin
@@ -22,6 +23,7 @@ class ConnexionView(APIView):
     Renvoie les tokens JWT et le profil utilisateur avec son rôle.
     """
     permission_classes = [AllowAny]
+    throttle_scope = 'auth_login'
 
     def post(self, request):
         serializer = ConnexionSerializer(data=request.data)
@@ -60,6 +62,7 @@ class InscriptionCitoyenView(APIView):
     Pas de SMS OTP ni de validation référent requis.
     """
     permission_classes = [AllowAny]
+    throttle_scope = 'auth_registration'
 
     def post(self, request):
         serializer = InscriptionCitoyenSerializer(data=request.data)
@@ -108,6 +111,8 @@ class InscriptionPersonnelView(APIView):
     Le compte est créé avec statut_validation = en_attente et AUCUN jeton n'est émis.
     Renvoie 201 avec le profil Utilisateur en attente de validation admin.
     """
+    throttle_scope = 'auth_registration'
+
     def get_permissions(self):
         # Les candidatures publiques ne sont permises que si elles seront soumises
         # à validation. Sans validation, seul un administrateur peut créer le compte.
@@ -155,14 +160,24 @@ class OtpVerifierView(APIView):
     Validation du code OTP reçu par SMS.
     """
     permission_classes = [AllowAny]
+    throttle_scope = 'auth_otp_verify'
 
     def post(self, request):
         serializer = OtpVerificationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         otp = serializer.validated_data['otp']
-        otp.utilise = True
-        otp.save()
+        claimed = CodeOTP.objects.filter(
+            pk=otp.pk,
+            utilise=False,
+            tentatives__lt=CodeOTP.MAX_TENTATIVES,
+            expire_le__gt=timezone.now(),
+        ).update(utilise=True)
+        if not claimed:
+            return Response(
+                {"code": "OTP_INVALIDE", "message": "Ce code OTP n'est plus valide", "details": {}},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
 
         # Validation du téléphone de l'utilisateur
         utilisateur = Utilisateur.objects.filter(telephone=otp.telephone).first()
@@ -183,6 +198,7 @@ class OtpRenvoyerView(APIView):
     Renvoi d'un nouveau code OTP.
     """
     permission_classes = [AllowAny]
+    throttle_scope = 'auth_otp_resend'
 
     def post(self, request):
         telephone = request.data.get('telephone')
@@ -210,6 +226,7 @@ class CustomTokenRefreshView(APIView):
     Refuse les comptes en attente, refusés ou inactifs (403 COMPTE_NON_VALIDE).
     """
     permission_classes = [AllowAny]
+    throttle_scope = 'auth_refresh'
 
     def post(self, request):
         from apps.comptes.serializers import CustomTokenRefreshSerializer

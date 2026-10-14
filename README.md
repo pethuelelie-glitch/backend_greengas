@@ -123,7 +123,8 @@ HTTPS du Control Center. Configurer `CSRF_TRUSTED_ORIGINS` pour les interfaces q
 les cookies de session. HTTPS (redirection) et les cookies sécurisés sont activés par défaut.
 Choisir explicitement `DB_ENGINE=mysql` ou `DB_ENGINE=postgresql` et fournir `DB_NAME`,
 `DB_USER`, `DB_PASSWORD` et `DB_HOST`. Le démarrage refuse les identifiants absents, un moteur
-inconnu et SQLite en production. `psycopg` et Gunicorn sont inclus dans `requirements.txt`.
+inconnu, SQLite en production et l'absence d'un cache partagé (`CACHE_URL`, Redis recommandé).
+`psycopg`, `django-redis` et Gunicorn sont inclus dans `requirements.txt`.
 
 Le proxy ou l'hébergeur doit terminer TLS. Définir `TRUST_X_FORWARDED_PROTO=True` uniquement
 si ce proxy supprime l'en-tête client et transmet lui-même `X-Forwarded-Proto: https`; sinon
@@ -131,16 +132,24 @@ la redirection HTTPS ne peut pas reconnaître la connexion TLS terminée en amon
 configurable avec `SECURE_HSTS_SECONDS`; l'inclusion des sous-domaines et le préchargement
 sont désactivés jusqu'à validation de tous les domaines concernés.
 
+En production, les limites d'appels s'appliquent aux routes publiques et aux utilisateurs.
+Régler `API_NUM_PROXIES` au nombre exact de proxies de confiance et s'assurer qu'ils remplacent
+`X-Forwarded-For`; sans cela, les limites par adresse ne sont pas fiables.
+
 Les jetons d'accès expirent après 15 minutes; les refresh expirent après 7 jours, sont renouvelés
 à chaque usage et révoqués à la rotation ou via `POST /api/v1/auth/deconnexion/`. Appliquer les
 migrations avant de démarrer (`python manage.py migrate`) et planifier quotidiennement
 `python manage.py flushexpiredtokens` pour purger les refresh expirés.
 
+Les routes d'OTP ont une limite de tentatives, mais aucun fournisseur SMS n'est intégré:
+`POST /api/v1/auth/otp/renvoyer/` ne livre pas le code. Ne pas activer un parcours de vérification
+par SMS en production avant d'avoir branché et configuré le fournisseur choisi.
+
 Les demandes publiques de comptes personnel restent possibles lorsque la validation
 administrateur est activée. Si elle est désactivée, seule une session administrateur peut créer
 ces comptes. Les données de démonstration activent cette validation par défaut.
 
-### 6. Lancer l'ensemble des tests automatisés (59 tests)
+### 6. Lancer l'ensemble des tests automatisés (60 tests)
 ```bash
 python manage.py test apps.comptes.tests apps.referentiel.tests apps.collecte.tests apps.tri.tests apps.greenpoints.tests apps.energie.tests apps.supervision.tests apps.simulateur.tests
 ```

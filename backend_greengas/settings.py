@@ -103,6 +103,21 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'backend_greengas.wsgi.application'
 
+# Cache partagé requis en production pour que les limites DRF soient cohérentes
+# entre workers/instances. Le développement conserve le cache local par défaut.
+CACHE_URL = os.environ.get('CACHE_URL')
+if not DEBUG and not CACHE_URL:
+    raise ValueError("CACHE_URL doit pointer vers un cache partagé en production (Redis recommandé).")
+if CACHE_URL:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django_redis.cache.RedisCache',
+            'LOCATION': CACHE_URL,
+            'OPTIONS': {'CLIENT_CLASS': 'django_redis.client.DefaultClient'},
+            'KEY_PREFIX': 'greengas',
+        }
+    }
+
 
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
@@ -217,6 +232,25 @@ REST_FRAMEWORK = {
     'COERCE_DECIMAL_TO_STRING': False,
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
+    ),
+    'DEFAULT_THROTTLE_CLASSES': (
+        (
+            'rest_framework.throttling.AnonRateThrottle',
+            'rest_framework.throttling.UserRateThrottle',
+            'rest_framework.throttling.ScopedRateThrottle',
+        ) if not DEBUG else ()
+    ),
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '120/hour',
+        'user': '1000/hour',
+        'auth_login': '10/minute',
+        'auth_registration': '5/hour',
+        'auth_otp_verify': '5/minute',
+        'auth_otp_resend': '3/hour',
+        'auth_refresh': '60/minute',
+    },
+    'NUM_PROXIES': (
+        int(os.environ.get('API_NUM_PROXIES', '1')) if not DEBUG else None
     ),
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'apps.comptes.authentication.CustomJWTAuthentication',
