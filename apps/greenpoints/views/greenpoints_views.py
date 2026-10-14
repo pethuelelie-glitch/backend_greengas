@@ -139,6 +139,7 @@ class RecompenseListCreateView(generics.ListCreateAPIView):
                 queryset = queryset.filter(actif=False)
         return queryset
 
+    @transaction.atomic
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -181,9 +182,11 @@ class RecompenseDetailView(generics.RetrieveUpdateAPIView):
             return [EstAdmin()]
         return [IsAuthenticated()]
 
+    @transaction.atomic
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop('partial', True)
         instance = self.get_object()
+        instance = Recompense.objects.select_for_update().get(pk=instance.pk)
         ancien_etat = {
             "nom": instance.nom,
             "cout_points": instance.cout_points,
@@ -248,9 +251,11 @@ class EchangeListCreateView(generics.ListCreateAPIView):
 
         return queryset.select_related('citoyen', 'recompense').order_by('-date')
 
+    @transaction.atomic
     def create(self, request, *args, **kwargs):
         if request.user.role != Role.CITOYEN:
             raise PermissionDenied("Seuls les citoyens peuvent échanger leurs GreenPoints")
+        citoyen = Utilisateur.objects.select_for_update().get(pk=request.user.pk)
         serializer = EchangeCreationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         recompense_id = serializer.validated_data['recompense_id']
@@ -266,12 +271,12 @@ class EchangeListCreateView(generics.ListCreateAPIView):
 
         # 2. Calcul du solde disponible du citoyen
         total_gagne = GreenPointsTransaction.objects.filter(
-            citoyen=request.user,
+            citoyen=citoyen,
             statut=StatutTransaction.CREDITEE
         ).aggregate(total=Sum('points'))['total'] or 0
 
         total_echange = Echange.objects.filter(
-            citoyen=request.user
+            citoyen=citoyen
         ).aggregate(total=Sum('cout_points'))['total'] or 0
 
         solde_disponible = total_gagne - total_echange
@@ -287,13 +292,13 @@ class EchangeListCreateView(generics.ListCreateAPIView):
         # 4. Création atomique de l'échange
         with transaction.atomic():
             echange = Echange.objects.create(
-                citoyen=request.user,
+                citoyen=citoyen,
                 recompense=recompense,
                 cout_points=recompense.cout_points
             )
 
             JournalAudit.objects.create(
-                auteur=request.user,
+                auteur=citoyen,
                 action="echange.creer",
                 objet_type=TypeObjet.ECHANGE,
                 objet_id=str(echange.id),
@@ -310,7 +315,7 @@ class EchangeListCreateView(generics.ListCreateAPIView):
                 from apps.supervision.models import TypeNotification, NiveauNotification
                 from apps.supervision.services import creer_notification
                 creer_notification(
-                    destinataire=request.user,
+                    destinataire=citoyen,
                     type=TypeNotification.ECHANGE_EFFECTUE,
                     niveau=NiveauNotification.INFO,
                     titre="Récompense échangée",

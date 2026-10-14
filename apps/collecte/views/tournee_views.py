@@ -1,4 +1,5 @@
 from django.utils import timezone
+from django.db import transaction
 from rest_framework import generics, status
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
@@ -67,6 +68,7 @@ class TourneeListCreateView(generics.ListCreateAPIView):
 
         return queryset.order_by('-date', 'code')
 
+    @transaction.atomic
     def create(self, request, *args, **kwargs):
         serializer = TourneeCreationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -177,9 +179,12 @@ class TourneeDemarrerView(APIView):
     """
     permission_classes = [IsAuthenticated]
 
+    @transaction.atomic
     def post(self, request, id=None, pk=None):
         tournee_id = id or pk
-        tournee = generics.get_object_or_404(Tournee, id=tournee_id)
+        tournee = generics.get_object_or_404(
+            Tournee.objects.select_for_update(), id=tournee_id
+        )
 
         if not (request.user.is_superuser or request.user.role == Role.ADMINISTRATEUR or
                 (request.user.role == Role.COLLECTEUR and tournee.collecteur_id == request.user.id)):
@@ -204,9 +209,12 @@ class TourneeCollecteOuvrirView(APIView):
     """
     permission_classes = [IsAuthenticated]
 
+    @transaction.atomic
     def post(self, request, id=None, pk=None):
         tournee_id = id or pk
-        tournee = generics.get_object_or_404(Tournee, id=tournee_id)
+        tournee = generics.get_object_or_404(
+            Tournee.objects.select_for_update(), id=tournee_id
+        )
 
         if not (request.user.is_superuser or request.user.role == Role.ADMINISTRATEUR or
                 (request.user.role == Role.COLLECTEUR and tournee.collecteur_id == request.user.id)):
@@ -272,9 +280,12 @@ class TourneeCloturerView(APIView):
     """
     permission_classes = [IsAuthenticated]
 
+    @transaction.atomic
     def post(self, request, id=None, pk=None):
         tournee_id = id or pk
-        tournee = generics.get_object_or_404(Tournee, id=tournee_id)
+        tournee = generics.get_object_or_404(
+            Tournee.objects.select_for_update(), id=tournee_id
+        )
 
         if not (request.user.is_superuser or request.user.role == Role.ADMINISTRATEUR or
                 (request.user.role == Role.COLLECTEUR and tournee.collecteur_id == request.user.id)):

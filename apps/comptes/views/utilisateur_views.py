@@ -1,4 +1,5 @@
 import json
+from django.db import transaction
 from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -102,8 +103,11 @@ class UtilisateurValidationView(APIView):
     """
     permission_classes = [EstAdmin]
 
+    @transaction.atomic
     def post(self, request, id):
-        utilisateur = generics.get_object_or_404(Utilisateur, id=id)
+        utilisateur = generics.get_object_or_404(
+            Utilisateur.objects.select_for_update(), id=id
+        )
 
         # Ne concerne que les comptes du personnel en attente -> sinon 409 CONFLIT ("Ce compte n'attend pas de validation.")
         if utilisateur.role not in [Role.OPERATEUR_TRI, Role.RESPONSABLE_METHANISATION] or utilisateur.statut_validation != StatutValidation.EN_ATTENTE:
@@ -132,19 +136,15 @@ class UtilisateurValidationView(APIView):
 
         utilisateur.save()
 
-        # Journalisation dans JournalAudit
-        try:
-            from apps.supervision.models import JournalAudit, TypeObjet
-            JournalAudit.objects.create(
-                auteur=request.user,
-                action=f"utilisateur.{decision}",
-                objet_type=TypeObjet.UTILISATEUR,
-                objet_id=str(utilisateur.id),
-                ancienne_valeur=json.dumps({"statut_validation": "en_attente"}),
-                nouvelle_valeur=json.dumps({"statut_validation": utilisateur.statut_validation}),
-                motif=commentaire or f"Validation personnel : {decision}"
-            )
-        except Exception:
-            pass
+        from apps.supervision.models import JournalAudit, TypeObjet
+        JournalAudit.objects.create(
+            auteur=request.user,
+            action=f"utilisateur.{decision}",
+            objet_type=TypeObjet.UTILISATEUR,
+            objet_id=str(utilisateur.id),
+            ancienne_valeur=json.dumps({"statut_validation": "en_attente"}),
+            nouvelle_valeur=json.dumps({"statut_validation": utilisateur.statut_validation}),
+            motif=commentaire or f"Validation personnel : {decision}"
+        )
 
         return Response(UtilisateurSerializer(utilisateur).data, status=status.HTTP_200_OK)

@@ -1,5 +1,6 @@
 import json
 from decimal import Decimal
+from django.db import transaction
 
 from django.utils import timezone
 from rest_framework import generics, status
@@ -87,9 +88,12 @@ class CollectePeseeView(APIView):
     """
     permission_classes = [IsAuthenticated]
 
+    @transaction.atomic
     def post(self, request, id=None, pk=None):
         collecte_id = id or pk
-        collecte = generics.get_object_or_404(Collecte, id=collecte_id)
+        collecte = generics.get_object_or_404(
+            Collecte.objects.select_for_update(), id=collecte_id
+        )
         if request.user.role not in [Role.ADMINISTRATEUR, Role.CAPTEUR] and not request.user.is_superuser:
             raise PermissionDenied("Seuls un administrateur ou un capteur peuvent enregistrer une pesée")
 
@@ -126,9 +130,12 @@ class CollecteValiderView(APIView):
     """
     permission_classes = [IsAuthenticated]
 
+    @transaction.atomic
     def post(self, request, id=None, pk=None):
         collecte_id = id or pk
-        collecte = generics.get_object_or_404(Collecte, id=collecte_id)
+        collecte = generics.get_object_or_404(
+            Collecte.objects.select_for_update(), id=collecte_id
+        )
 
         if not (request.user.is_superuser or request.user.role == Role.ADMINISTRATEUR or
                 (request.user.role == Role.COLLECTEUR and collecte.collecteur_id == request.user.id)):
@@ -205,9 +212,12 @@ class CollecteDecisionView(APIView):
     """
     permission_classes = [EstAdminOuReferent]
 
+    @transaction.atomic
     def post(self, request, id=None, pk=None):
         collecte_id = id or pk
-        collecte = generics.get_object_or_404(Collecte, id=collecte_id)
+        collecte = generics.get_object_or_404(
+            Collecte.objects.select_for_update(), id=collecte_id
+        )
 
         if request.user.role == Role.REFERENT and collecte.bac_id != request.user.bac_id:
             raise PermissionDenied("Cette collecte ne concerne pas votre bac")

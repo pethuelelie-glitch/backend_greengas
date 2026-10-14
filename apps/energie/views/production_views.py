@@ -1,5 +1,6 @@
 import json
 from decimal import Decimal
+from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import generics, status, permissions
@@ -141,8 +142,11 @@ class ProductionCloturerView(APIView):
     """
     permission_classes = [EstAdminOuResponsable]
 
+    @transaction.atomic
     def post(self, request, id):
-        production = get_object_or_404(ProductionEnergie, id=id)
+        production = get_object_or_404(
+            ProductionEnergie.objects.select_for_update(), id=id
+        )
 
         if production.statut_journee == StatutJournee.CLOTUREE:
             raise MetierException(
@@ -194,6 +198,7 @@ class SiteMesuresView(APIView):
     """
     permission_classes = [EstCapteurOuAdmin]
 
+    @transaction.atomic
     def post(self, request, id):
         site = get_object_or_404(Site, id=id)
         serializer = MesureSiteSerializer(data=request.data)
@@ -215,6 +220,7 @@ class SiteMesuresView(APIView):
                 'biogaz_attendu_m3': Decimal('0.00'),
             }
         )
+        production = ProductionEnergie.objects.select_for_update().get(pk=production.pk)
 
         # Si le biogaz attendu n'était pas calculé mais que des matières organiques ont été reçues
         if production.biogaz_attendu_m3 == Decimal('0.00') and production.poids_organique_recu_kg > Decimal('0.00'):

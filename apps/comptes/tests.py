@@ -69,6 +69,31 @@ class ComptesEndpointsTestCase(TestCase):
         self.assertEqual(response.data['details'], {})
         self.assertNotIn(secret_interne, str(response.data))
 
+    def test_validation_personnel_annule_si_le_journal_audit_echoue(self):
+        utilisateur = Utilisateur.objects.create_user(
+            telephone="+2250700000088",
+            email="audit.fail@greengas.ci",
+            nom="Personnel en attente",
+            password="Password123!",
+            role=Role.OPERATEUR_TRI,
+            statut_validation=StatutValidation.EN_ATTENTE,
+        )
+        self.client.force_authenticate(user=self.admin)
+
+        with patch(
+            'apps.supervision.models.JournalAudit.objects.create',
+            side_effect=RuntimeError("échec du journal"),
+        ):
+            response = self.client.post(
+                f"/api/v1/utilisateurs/{utilisateur.id}/validation/",
+                {"decision": "valider"},
+                format='json',
+            )
+
+        utilisateur.refresh_from_db()
+        self.assertEqual(response.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+        self.assertEqual(utilisateur.statut_validation, StatutValidation.EN_ATTENTE)
+
     def test_inscription_citoyen_directe_et_jetons(self):
         """
         OpenAPI 1.3.0 : Pas de SMS OTP ni de validation référent.

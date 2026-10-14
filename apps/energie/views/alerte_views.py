@@ -1,4 +1,5 @@
 import json
+from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import generics, status
@@ -55,8 +56,9 @@ class AlerteResoudreView(APIView):
     """
     permission_classes = [EstAdminOuResponsable]
 
+    @transaction.atomic
     def post(self, request, id):
-        alerte = get_object_or_404(Alerte, id=id)
+        alerte = get_object_or_404(Alerte.objects.select_for_update(), id=id)
 
         if alerte.statut == StatutAlerte.RESOLUE:
             raise MetierException(

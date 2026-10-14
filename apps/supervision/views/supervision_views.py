@@ -1,5 +1,6 @@
 import json
 from decimal import Decimal
+from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import generics, status
@@ -204,8 +205,9 @@ class ParametreDetailUpdateView(APIView):
     """
     permission_classes = [EstAdmin]
 
+    @transaction.atomic
     def patch(self, request, cle):
-        parametre = get_object_or_404(Parametre, cle=cle)
+        parametre = get_object_or_404(Parametre.objects.select_for_update(), cle=cle)
         serializer = ParametreUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
