@@ -280,3 +280,10 @@ class TriEndpointsTestCase(TestCase):
         self.assertEqual(response_filtre.status_code, status.HTTP_200_OK)
         self.assertEqual(response_filtre.data['count'], 1)
         self.assertEqual(response_filtre.data['results'][0]['code_lot'], "ORG-0001")
+
+        self.client.force_authenticate(user=self.citoyen1)
+        res_citoyen_lots = self.client.get('/api/v1/lots/')
+        self.assertEqual(res_citoyen_lots.status_code, status.HTTP_403_FORBIDDEN)
+
+        res_citoyen_tri = self.client.get(f"/api/v1/tournees/{self.tournee.id}/tri/")
+        self.assertEqual(res_citoyen_tri.status_code, status.HTTP_403_FORBIDDEN)

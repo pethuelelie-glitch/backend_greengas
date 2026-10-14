@@ -7,7 +7,6 @@ from django.db.models import Sum
 from django.utils import timezone
 from rest_framework import generics, status
 from rest_framework.exceptions import NotFound, PermissionDenied
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -58,9 +57,7 @@ class TourneeTriView(APIView):
     """
 
     def get_permissions(self):
-        if self.request.method == 'POST':
-            return [(EstOperateurTri | EstAdmin)()]
-        return [IsAuthenticated()]
+        return [(EstOperateurTri | EstAdmin)()]
 
     def get(self, request, id=None, pk=None):
         tournee_id = id or pk
@@ -403,7 +400,7 @@ class LotListView(generics.ListAPIView):
     Filtres : tournee_id, categorie, date_debut, date_fin
     """
     serializer_class = LotTrieSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [EstOperateurTri | EstAdmin]
 
     def get_queryset(self):
         queryset = LotTrie.objects.all().select_related('tournee', 'site')

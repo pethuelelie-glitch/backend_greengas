@@ -5,7 +5,6 @@ from django.utils import timezone
 from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
 
 from apps.energie.models import Alerte, StatutAlerte
 from apps.energie.serializers import AlerteSerializer, ResoudreAlerteSerializer
@@ -21,7 +20,7 @@ class AlerteListView(generics.ListAPIView):
     Filtres : site_id, statut, type.
     """
     serializer_class = AlerteSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [EstAdminOuResponsable]
 
     def get_queryset(self):
         queryset = Alerte.objects.all().select_related('site', 'resolue_par').order_by('-date_creation')
@@ -44,7 +43,7 @@ class AlerteDetailView(generics.RetrieveAPIView):
     """
     queryset = Alerte.objects.all().select_related('site', 'resolue_par')
     serializer_class = AlerteSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [EstAdminOuResponsable]
     lookup_field = 'id'
 
 

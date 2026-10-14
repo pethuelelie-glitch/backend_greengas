@@ -7,6 +7,7 @@ from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import PermissionDenied
 
 from apps.supervision.models import Parametre, JournalAudit, TypeObjet
 from apps.supervision.serializers import (
@@ -193,7 +194,7 @@ class ParametreListView(generics.ListAPIView):
     """
     queryset = Parametre.objects.all().order_by('cle')
     serializer_class = ParametreSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [EstAdmin]
     pagination_class = None
 
 
@@ -280,6 +281,12 @@ class BacTracabiliteView(APIView):
 
     def get(self, request, id):
         bac = get_object_or_404(Bac, id=id)
+        if not (
+            request.user.is_superuser
+            or request.user.role == Role.ADMINISTRATEUR
+            or (request.user.role == Role.REFERENT and request.user.bac_id == bac.id)
+        ):
+            raise PermissionDenied("La traçabilité détaillée est réservée à l'administrateur et au référent du bac")
 
         citoyens_qs = bac.utilisateurs.all()
         citoyens_data = [

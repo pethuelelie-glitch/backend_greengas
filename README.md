@@ -151,7 +151,7 @@ Les demandes publiques de comptes personnel restent possibles lorsque la validat
 administrateur est activée. Si elle est désactivée, seule une session administrateur peut créer
 ces comptes. Les données de démonstration activent cette validation par défaut.
 
-### 6. Lancer l'ensemble des tests automatisés (62 tests)
+### 6. Lancer l'ensemble des tests automatisés (64 tests)
 ```bash
 python manage.py test apps.comptes.tests apps.referentiel.tests apps.collecte.tests apps.tri.tests apps.greenpoints.tests apps.energie.tests apps.supervision.tests apps.simulateur.tests
 ```

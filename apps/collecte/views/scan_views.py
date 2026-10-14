@@ -24,13 +24,19 @@ class ScanListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        if user.role == Role.CITOYEN:
-            queryset = Scan.objects.filter(citoyen=user)
-        else:
+        if user.role == Role.ADMINISTRATEUR or user.is_superuser:
             queryset = Scan.objects.all()
+        elif user.role == Role.CITOYEN:
+            queryset = Scan.objects.filter(citoyen=user)
+        elif user.role == Role.REFERENT and user.bac_id:
+            queryset = Scan.objects.filter(bac_id=user.bac_id)
+        elif user.role == Role.COLLECTEUR:
+            queryset = Scan.objects.filter(bac__collectes__collecteur=user).distinct()
+        else:
+            queryset = Scan.objects.none()
 
         citoyen_id = self.request.query_params.get('citoyen_id')
-        if citoyen_id and user.role != Role.CITOYEN:
+        if citoyen_id and (user.role == Role.ADMINISTRATEUR or user.is_superuser):
             queryset = queryset.filter(citoyen_id=citoyen_id)
 
         bac_id = self.request.query_params.get('bac_id')

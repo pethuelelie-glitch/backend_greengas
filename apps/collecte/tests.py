@@ -143,6 +143,23 @@ class CollecteEndpointsTestCase(TestCase):
         self.assertEqual(res.data['statut'], "refuse_plafond")
         self.assertFalse(res.data['compte'])
 
+    def test_historique_scans_est_limite_au_proprietaire(self):
+        Scan.objects.create(citoyen=self.citoyen_valide, bac=self.bac, statut=StatutScan.VALIDE, compte=True)
+        autre_citoyen = Utilisateur.objects.create_user(
+            telephone="+2250100000099", nom="Autre citoyen", password="password123", role=Role.CITOYEN
+        )
+        Scan.objects.create(citoyen=autre_citoyen, bac=self.bac, statut=StatutScan.VALIDE, compte=True)
+
+        self.client.force_authenticate(user=self.citoyen_valide)
+        response = self.client.get(f"/api/v1/scans/?citoyen_id={autre_citoyen.id}")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['count'], 1)
+        self.assertEqual(str(response.data['results'][0]['citoyen']), str(self.citoyen_valide.id))
+
+        self.client.force_authenticate(user=self.collecteur)
+        response_collecteur = self.client.get('/api/v1/scans/')
+        self.assertEqual(response_collecteur.data['count'], 0)
+
     def test_tournee_workflow_complet(self):
         # 1. Admin crée la tournée
         self.client.force_authenticate(user=self.admin)

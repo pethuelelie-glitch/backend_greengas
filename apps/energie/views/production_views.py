@@ -6,7 +6,6 @@ from django.utils import timezone
 from rest_framework import generics, status, permissions
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
 
 from apps.energie.models import (
     ProductionEnergie,
@@ -43,7 +42,7 @@ class ProductionListView(generics.ListAPIView):
     Liste paginée des productions journalières avec filtres site_id, date_debut, date_fin.
     """
     serializer_class = ProductionEnergieSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [EstAdminOuResponsable]
 
     def get_queryset(self):
         queryset = ProductionEnergie.objects.all().select_related('site').order_by('-date', 'site__code')
@@ -64,7 +63,7 @@ class ProductionGlobaleView(APIView):
     GET /api/v1/productions/globale/
     Agrégat de production de tous les sites pour une date donnée.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [EstAdminOuResponsable]
 
     def get(self, request):
         date_str = request.query_params.get('date')
@@ -129,7 +128,7 @@ class ProductionDetailView(generics.RetrieveAPIView):
     """
     queryset = ProductionEnergie.objects.all().select_related('site')
     serializer_class = ProductionEnergieSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [EstAdminOuResponsable]
     lookup_field = 'id'
 
 
