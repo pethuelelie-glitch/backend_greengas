@@ -60,10 +60,10 @@ class ScanListCreateView(generics.ListCreateAPIView):
                 status_code=status.HTTP_403_FORBIDDEN
             )
 
-        if request.user.statut_validation != StatutValidation.VALIDE:
+        if not request.user.actif or request.user.statut_validation != StatutValidation.VALIDE:
             raise MetierException(
                 code="COMPTE_NON_VALIDE",
-                message="Votre compte citoyen n'est pas encore validé",
+                message="Ce compte est désactivé ou non validé.",
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY
             )
 

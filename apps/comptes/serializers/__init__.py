@@ -5,6 +5,7 @@ from .auth_serializers import (
     InscriptionCitoyenSerializer,
     InscriptionPersonnelSerializer,
     OtpVerificationSerializer,
+    CustomTokenRefreshSerializer,
 )
 
 __all__ = [
@@ -14,4 +15,5 @@ __all__ = [
     'InscriptionCitoyenSerializer',
     'InscriptionPersonnelSerializer',
     'OtpVerificationSerializer',
+    'CustomTokenRefreshSerializer',
 ]

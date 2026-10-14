@@ -86,8 +86,7 @@ class Utilisateur(AbstractBaseUser, PermissionsMixin):
     statut_validation = models.CharField(
         max_length=20,
         choices=StatutValidation.choices,
-        null=True,
-        blank=True,
+        default=StatutValidation.VALIDE,
         verbose_name="Statut de validation"
     )
     date_inscription = models.DateTimeField(null=True, blank=True, verbose_name="Date d'inscription")

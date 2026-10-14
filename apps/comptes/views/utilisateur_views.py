@@ -105,22 +105,11 @@ class UtilisateurValidationView(APIView):
     def post(self, request, id):
         utilisateur = generics.get_object_or_404(Utilisateur, id=id)
 
-        # Seuls operateur_tri et responsable_methanisation
-        if utilisateur.role not in [Role.OPERATEUR_TRI, Role.RESPONSABLE_METHANISATION]:
-            return Response(
-                {
-                    "code": "VALIDATION",
-                    "message": "Seuls les comptes personnel (opérateur de tri ou responsable méthanisation) sont concernés par cette validation.",
-                    "details": {}
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # Un compte qui n'est pas en_attente renvoie 409 CONFLIT
-        if utilisateur.statut_validation != StatutValidation.EN_ATTENTE:
+        # Ne concerne que les comptes du personnel en attente -> sinon 409 CONFLIT ("Ce compte n'attend pas de validation.")
+        if utilisateur.role not in [Role.OPERATEUR_TRI, Role.RESPONSABLE_METHANISATION] or utilisateur.statut_validation != StatutValidation.EN_ATTENTE:
             raise ConflitException(
                 code="CONFLIT",
-                message="Ce compte n'est pas en attente de validation.",
+                message="Ce compte n'attend pas de validation.",
                 details={"statut_validation": utilisateur.statut_validation}
             )
 

@@ -176,3 +176,192 @@ class ComptesEndpointsTestCase(TestCase):
         res_redoc = self.client.get("/api/redoc/")
         self.assertEqual(res_redoc.status_code, status.HTTP_200_OK)
         self.assertIn("redoc", str(res_redoc.content))
+
+    def test_verification_1_citoyen_inscription_et_scan(self):
+        """
+        1. Inscription d'un citoyen avec code_bac = BAC-014 -> jetons reçus, puis POST /scans/ accepté.
+        """
+        payload = {
+            "telephone": "+2250711223344",
+            "nom": "Citoyen Test",
+            "mot_de_passe": "greengas2026",
+            "code_bac": "BAC-014"
+        }
+        res_inscr = self.client.post("/api/v1/auth/inscription/", payload, format='json')
+        self.assertEqual(res_inscr.status_code, status.HTTP_201_CREATED)
+        self.assertIn('access', res_inscr.data)
+        access_token = res_inscr.data['access']
+
+        # Scan immédiat sans attente de SMS ni de validation
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {access_token}")
+        res_scan = self.client.post(
+            "/api/v1/scans/",
+            {
+                "code_bac": "BAC-014",
+                "latitude": 5.345000,
+                "longitude": -4.012000
+            },
+            format='json'
+        )
+        self.assertEqual(res_scan.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res_scan.data['statut'], 'valide')
+        self.assertTrue(res_scan.data['compte'])
+
+    def test_verification_2_operateur_inscription_sans_jetons_et_connexion_bloquee(self):
+        """
+        2. Inscription d'un opérateur -> 201 sans jetons ; sa connexion -> 403 COMPTE_NON_VALIDE.
+        """
+        payload = {
+            "telephone": "+2250788990011",
+            "email": "operateur.test@greengas.ci",
+            "nom": "Nouvel Opérateur",
+            "mot_de_passe": "greengas2026",
+            "role": "operateur_tri"
+        }
+        res_inscr = self.client.post("/api/v1/auth/inscription/personnel/", payload, format='json')
+        self.assertEqual(res_inscr.status_code, status.HTTP_201_CREATED)
+        self.assertNotIn('access', res_inscr.data)
+        self.assertEqual(res_inscr.data['statut_validation'], 'en_attente')
+
+        # Tentative de connexion -> 403 COMPTE_NON_VALIDE
+        res_conn = self.client.post(
+            "/api/v1/auth/token/",
+            {"telephone": "+2250788990011", "mot_de_passe": "greengas2026"},
+            format='json'
+        )
+        self.assertEqual(res_conn.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(res_conn.data['code'], "COMPTE_NON_VALIDE")
+        self.assertEqual(res_conn.data['details'].get('statut_validation'), "en_attente")
+
+    def test_verification_3_ibrahim_connexion_validation_reconnexion(self):
+        """
+        3. Connexion d'Ibrahim -> 403 ; validation par l'admin ; nouvelle connexion -> 200.
+        """
+        ibrahim = Utilisateur.objects.create_user(
+            telephone="+2250700000008",
+            email="ibrahim.kone@greengas.ci",
+            nom="Ibrahim Koné",
+            password="greengas2026",
+            role=Role.OPERATEUR_TRI,
+            statut_validation=StatutValidation.EN_ATTENTE
+        )
+
+        # 1. Connexion d'Ibrahim -> 403
+        res_login_1 = self.client.post(
+            "/api/v1/auth/token/",
+            {"email": "ibrahim.kone@greengas.ci", "mot_de_passe": "greengas2026"},
+            format='json'
+        )
+        self.assertEqual(res_login_1.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(res_login_1.data['code'], "COMPTE_NON_VALIDE")
+
+        # 2. Validation par l'administrateur
+        self.client.force_authenticate(user=self.admin)
+        res_val = self.client.post(
+            f"/api/v1/utilisateurs/{ibrahim.id}/validation/",
+            {"decision": "valider", "commentaire": "Approuvé pour l'équipe de tri"},
+            format='json'
+        )
+        self.assertEqual(res_val.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_val.data['statut_validation'], "valide")
+
+        # 3. Nouvelle connexion -> 200 OK
+        self.client.credentials()
+        res_login_2 = self.client.post(
+            "/api/v1/auth/token/",
+            {"telephone": "+2250700000008", "mot_de_passe": "greengas2026"},
+            format='json'
+        )
+        self.assertEqual(res_login_2.status_code, status.HTTP_200_OK)
+        self.assertIn('access', res_login_2.data)
+
+    def test_verification_4_validation_referent_refusee_et_validation_citoyen_conflit(self):
+        """
+        4. Validation demandée par le référent -> 403 ; validation d'un citoyen -> 409.
+        """
+        referent = Utilisateur.objects.create_user(
+            telephone="+2250700000005",
+            email="referent@greengas.ci",
+            nom="Référent Soleil",
+            password="greengas2026",
+            role=Role.REFERENT,
+            bac=self.bac,
+            statut_validation=StatutValidation.VALIDE
+        )
+        citoyen = Utilisateur.objects.create_user(
+            telephone="+2250701020304",
+            nom="Awa Citoyenne",
+            password="greengas2026",
+            role=Role.CITOYEN,
+            bac=self.bac,
+            statut_validation=StatutValidation.VALIDE
+        )
+        operateur = Utilisateur.objects.create_user(
+            telephone="+2250799999999",
+            email="op@greengas.ci",
+            nom="Opérateur En Attente",
+            password="greengas2026",
+            role=Role.OPERATEUR_TRI,
+            statut_validation=StatutValidation.EN_ATTENTE
+        )
+
+        # A. Validation demandée par le référent -> 403 ACCES_REFUSE
+        self.client.force_authenticate(user=referent)
+        res_ref = self.client.post(
+            f"/api/v1/utilisateurs/{operateur.id}/validation/",
+            {"decision": "valider"},
+            format='json'
+        )
+        self.assertEqual(res_ref.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(res_ref.data['code'], "ACCES_REFUSE")
+
+        # B. Validation d'un citoyen par l'administrateur -> 409 CONFLIT
+        self.client.force_authenticate(user=self.admin)
+        res_cit = self.client.post(
+            f"/api/v1/utilisateurs/{citoyen.id}/validation/",
+            {"decision": "valider"},
+            format='json'
+        )
+        self.assertEqual(res_cit.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(res_cit.data['code'], "CONFLIT")
+        self.assertEqual(res_cit.data['message'], "Ce compte n'attend pas de validation.")
+
+    def test_verification_code_bac_inconnu_renvoie_404(self):
+        """
+        OpenAPI 1.3.0 : 404 INTROUVABLE si code de bac inconnu à l'inscription citoyen.
+        """
+        payload = {
+            "telephone": "+2250755667788",
+            "nom": "Citoyen Bac Inconnu",
+            "mot_de_passe": "greengas2026",
+            "code_bac": "BAC-INCONNU"
+        }
+        res = self.client.post("/api/v1/auth/inscription/", payload, format='json')
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(res.data['code'], "INTROUVABLE")
+
+    def test_verification_rafraichir_bloque_compte_en_attente_ou_inactif(self):
+        """
+        OpenAPI 1.3.0 : Le rafraîchissement d'un jeton (/auth/token/rafraichir/)
+        doit être refusé (403 COMPTE_NON_VALIDE) pour les comptes en attente, refusés ou désactivés.
+        """
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        user_inactif = Utilisateur.objects.create_user(
+            telephone="+2250766778899",
+            nom="User Inactif",
+            password="greengas2026",
+            role=Role.CITOYEN,
+            actif=False,
+            statut_validation=StatutValidation.VALIDE
+        )
+        refresh = RefreshToken.for_user(user_inactif)
+
+        res = self.client.post(
+            "/api/v1/auth/token/rafraichir/",
+            {"refresh": str(refresh)},
+            format='json'
+        )
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(res.data['code'], "COMPTE_NON_VALIDE")
+        self.assertEqual(res.data['details'].get('actif'), False)

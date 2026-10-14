@@ -150,3 +150,18 @@ class OtpRenvoyerView(APIView):
 
         CodeOTP.generer_code(telephone)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class CustomTokenRefreshView(APIView):
+    """
+    POST /api/v1/auth/token/rafraichir/
+    Rafraîchissement de token JWT.
+    Refuse les comptes en attente, refusés ou inactifs (403 COMPTE_NON_VALIDE).
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        from apps.comptes.serializers import CustomTokenRefreshSerializer
+        serializer = CustomTokenRefreshSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return Response(serializer.validated_data, status=status.HTTP_200_OK)

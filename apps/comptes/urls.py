@@ -1,5 +1,4 @@
 from django.urls import path
-from rest_framework_simplejwt.views import TokenRefreshView
 from apps.comptes.views import (
     ConnexionView,
     MoiView,
@@ -7,6 +6,7 @@ from apps.comptes.views import (
     InscriptionPersonnelView,
     OtpVerifierView,
     OtpRenvoyerView,
+    CustomTokenRefreshView,
     UtilisateurListCreateView,
     UtilisateurDetailView,
     UtilisateurValidationView,
@@ -15,7 +15,7 @@ from apps.comptes.views import (
 urlpatterns = [
     # Authentification (/api/v1/auth/...)
     path('auth/token/', ConnexionView.as_view(), name='auth_token'),
-    path('auth/token/rafraichir/', TokenRefreshView.as_view(), name='auth_token_rafraichir'),
+    path('auth/token/rafraichir/', CustomTokenRefreshView.as_view(), name='auth_token_rafraichir'),
     path('auth/moi/', MoiView.as_view(), name='auth_moi'),
     path('auth/inscription/', InscriptionCitoyenView.as_view(), name='auth_inscription'),
     path('auth/inscription/personnel/', InscriptionPersonnelView.as_view(), name='auth_inscription_personnel'),

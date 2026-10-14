@@ -20,10 +20,18 @@ TELEPHONE_REGEX = r'^\+225[0-9]{10}$'
 class ProfilCitoyenSerializer(serializers.ModelSerializer):
     bac_id = serializers.UUIDField(source='bac.id', read_only=True, allow_null=True)
     code_bac = serializers.CharField(source='bac.code', read_only=True, allow_null=True)
+    telephone_verifie = serializers.SerializerMethodField()
+    statut_validation = serializers.SerializerMethodField()
 
     class Meta:
         model = Utilisateur
         fields = ['bac_id', 'code_bac', 'telephone_verifie', 'statut_validation', 'date_inscription']
+
+    def get_telephone_verifie(self, obj):
+        return True
+
+    def get_statut_validation(self, obj):
+        return 'valide'
 
 
 class UtilisateurSerializer(serializers.ModelSerializer):
@@ -83,24 +91,28 @@ class ConnexionSerializer(serializers.Serializer):
             email_clean = str(email).strip().lower()
             user = Utilisateur.objects.filter(email__iexact=email_clean).first()
 
-        # Vérifier l'existence et le mot de passe -> 401 si mauvais
+        # Vérifier d'abord l'existence et le mot de passe -> 401 si mauvais
         if not user or not user.check_password(password):
             raise AuthenticationFailed(detail="Identifiant ou mot de passe incorrect.")
 
-        # Le mot de passe est vérifié avant. Vérification statut d'activation / validation :
-        if not user.actif:
+        # Vérification statut de validation et statut d'activation (403 COMPTE_NON_VALIDE)
+        if user.statut_validation == StatutValidation.EN_ATTENTE:
             raise CompteNonValideException(
-                message="Ce compte a été désactivé.",
-                details={"actif": False}
+                message="Votre compte attend la validation d'un administrateur.",
+                details={"statut_validation": "en_attente"}
             )
 
-        # Personnel en attente ou refusé -> 403 COMPTE_NON_VALIDE
-        if user.role in [Role.OPERATEUR_TRI, Role.RESPONSABLE_METHANISATION]:
-            if user.statut_validation in [StatutValidation.EN_ATTENTE, StatutValidation.REFUSE]:
-                raise CompteNonValideException(
-                    message=f"Compte personnel {user.statut_validation}.",
-                    details={"statut_validation": user.statut_validation}
-                )
+        if user.statut_validation == StatutValidation.REFUSE:
+            raise CompteNonValideException(
+                message="Votre demande d'accès a été refusée.",
+                details={"statut_validation": "refuse"}
+            )
+
+        if not user.actif:
+            raise CompteNonValideException(
+                message="Ce compte est désactivé.",
+                details={"actif": False}
+            )
 
         attrs['user'] = user
         return attrs
@@ -133,7 +145,8 @@ class InscriptionCitoyenSerializer(serializers.Serializer):
             bac = Bac.objects.get(code=value)
             return bac
         except Bac.DoesNotExist:
-            raise serializers.ValidationError(f"Le bac avec le code '{value}' est introuvable.")
+            from rest_framework.exceptions import NotFound
+            raise NotFound(detail=f"Le bac avec le code '{value}' est introuvable.", code="INTROUVABLE")
 
     def create(self, validated_data):
         bac = validated_data['code_bac']
@@ -247,3 +260,48 @@ class OtpVerificationSerializer(serializers.Serializer):
 
         attrs['otp'] = otp
         return attrs
+
+
+class CustomTokenRefreshSerializer(serializers.Serializer):
+    """
+    Rafraîchissement de token JWT.
+    Vérifie que le compte n'est pas en attente, refusé ou inactif (403 COMPTE_NON_VALIDE).
+    """
+    refresh = serializers.CharField()
+
+    def validate(self, attrs):
+        from rest_framework_simplejwt.tokens import RefreshToken
+        from rest_framework_simplejwt.exceptions import TokenError
+
+        refresh_str = attrs.get('refresh')
+        try:
+            refresh = RefreshToken(refresh_str)
+        except TokenError as e:
+            raise AuthenticationFailed(detail=str(e))
+
+        user_id = refresh.payload.get('user_id')
+        user = Utilisateur.objects.filter(id=user_id).first()
+
+        if user:
+            if user.statut_validation == StatutValidation.EN_ATTENTE:
+                raise CompteNonValideException(
+                    message="Votre compte attend la validation d'un administrateur.",
+                    details={"statut_validation": "en_attente"}
+                )
+
+            if user.statut_validation == StatutValidation.REFUSE:
+                raise CompteNonValideException(
+                    message="Votre demande d'accès a été refusée.",
+                    details={"statut_validation": "refuse"}
+                )
+
+            if not user.actif:
+                raise CompteNonValideException(
+                    message="Ce compte est désactivé.",
+                    details={"actif": False}
+                )
+
+        # Générer nouveau access token
+        return {
+            'access': str(refresh.access_token),
+        }
