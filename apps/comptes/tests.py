@@ -47,6 +47,12 @@ class ComptesEndpointsTestCase(TestCase):
             statut_validation=StatutValidation.VALIDE
         )
 
+        from apps.supervision.models import Parametre
+        Parametre.objects.update_or_create(
+            cle="validation_comptes_personnel",
+            defaults={"valeur": Decimal('1'), "unite": "", "statut": "aligne"}
+        )
+
     def test_inscription_citoyen_directe_et_jetons(self):
         """
         OpenAPI 1.3.0 : Pas de SMS OTP ni de validation référent.
@@ -164,10 +170,10 @@ class ComptesEndpointsTestCase(TestCase):
         self.assertIn('access', res_ok.data)
 
     def test_documentation_swagger_et_redoc(self):
-        # Vérification OpenAPI 1.3.0
+        # Vérification OpenAPI 1.5.0
         res_schema = self.client.get("/api/schema/")
         self.assertEqual(res_schema.status_code, status.HTTP_200_OK)
-        self.assertEqual(res_schema.json()['info']['version'], "1.3.0")
+        self.assertEqual(res_schema.json()['info']['version'], "1.5.0")
 
         res_docs = self.client.get("/api/docs/")
         self.assertEqual(res_docs.status_code, status.HTTP_200_OK)
@@ -365,3 +371,189 @@ class ComptesEndpointsTestCase(TestCase):
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(res.data['code'], "COMPTE_NON_VALIDE")
         self.assertEqual(res.data['details'].get('actif'), False)
+
+
+class Contrat150TestCase(TestCase):
+    """
+    Tests exhaustifs du Contrat 1.5.0 : Validation du personnel activable.
+    """
+    def setUp(self):
+        self.client = APIClient()
+
+        # Admin
+        self.admin = Utilisateur.objects.create_user(
+            telephone="+2250100000001",
+            email="admin@greengas.ci",
+            nom="Admin Principal",
+            password="password123",
+            role=Role.ADMINISTRATEUR,
+            statut_validation=StatutValidation.VALIDE
+        )
+
+        # Paramètre validation_comptes_personnel (valeur départ 0)
+        from apps.supervision.models import Parametre
+        self.param, _ = Parametre.objects.update_or_create(
+            cle="validation_comptes_personnel",
+            defaults={
+                "valeur": Decimal('0'),
+                "unite": "",
+                "statut": "aligne",
+                "description": "Validation des comptes du personnel par un administrateur"
+            }
+        )
+
+    def test_patch_validation_comptes_personnel_valeurs(self):
+        """
+        Modification de validation_comptes_personnel :
+        - 0 ou 1 autorisés (200 OK)
+        - toute autre valeur -> 422 PARAMETRE_INVALIDE
+        """
+        self.client.force_authenticate(user=self.admin)
+
+        # 1. Passer à 1 -> OK
+        res1 = self.client.patch(
+            "/api/v1/parametres/validation_comptes_personnel/",
+            {"valeur": 1, "motif": "Activation de la validation manuelle"},
+            format='json'
+        )
+        self.assertEqual(res1.status_code, status.HTTP_200_OK)
+        self.assertEqual(float(res1.data['valeur']), 1.0)
+
+        # 2. Passer à 0 -> OK
+        res0 = self.client.patch(
+            "/api/v1/parametres/validation_comptes_personnel/",
+            {"valeur": 0, "motif": "Désactivation"},
+            format='json'
+        )
+        self.assertEqual(res0.status_code, status.HTTP_200_OK)
+        self.assertEqual(float(res0.data['valeur']), 0.0)
+
+        # 3. Passer à 2 -> 422 PARAMETRE_INVALIDE
+        res2 = self.client.patch(
+            "/api/v1/parametres/validation_comptes_personnel/",
+            {"valeur": 2},
+            format='json'
+        )
+        self.assertEqual(res2.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertEqual(res2.data['code'], "PARAMETRE_INVALIDE")
+
+        # 4. Passer à -1 -> 422 PARAMETRE_INVALIDE
+        res_neg = self.client.patch(
+            "/api/v1/parametres/validation_comptes_personnel/",
+            {"valeur": -1},
+            format='json'
+        )
+        self.assertEqual(res_neg.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertEqual(res_neg.data['code'], "PARAMETRE_INVALIDE")
+
+    def test_inscription_personnel_selon_parametre(self):
+        """
+        POST /auth/inscription/personnel/ (toujours sans jetons) :
+        - paramètre à 0 -> statut_validation = valide, sans notification
+        - paramètre à 1 -> statut_validation = en_attente, notification compte_a_valider aux admins
+        """
+        from apps.supervision.models import Notification, TypeNotification
+
+        # 1. Paramètre à 0 : validation désactivée
+        self.param.valeur = Decimal('0')
+        self.param.save()
+
+        payload1 = {
+            "telephone": "+2250788000001",
+            "email": "agent1@greengas.ci",
+            "nom": "Agent Valide Direct",
+            "mot_de_passe": "password123",
+            "role": "operateur_tri"
+        }
+        res1 = self.client.post("/api/v1/auth/inscription/personnel/", payload1, format='json')
+        self.assertEqual(res1.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res1.data['statut_validation'], "valide")
+        self.assertNotIn("access", res1.data)
+        # Pas de notification créée
+        self.assertFalse(Notification.objects.filter(type=TypeNotification.COMPTE_A_VALIDER, objet_id=res1.data['id']).exists())
+
+        # 2. Paramètre à 1 : validation activée
+        self.param.valeur = Decimal('1')
+        self.param.save()
+
+        payload2 = {
+            "telephone": "+2250788000002",
+            "email": "agent2@greengas.ci",
+            "nom": "Agent En Attente",
+            "mot_de_passe": "password123",
+            "role": "responsable_methanisation"
+        }
+        res2 = self.client.post("/api/v1/auth/inscription/personnel/", payload2, format='json')
+        self.assertEqual(res2.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res2.data['statut_validation'], "en_attente")
+        self.assertNotIn("access", res2.data)
+        # Notification compte_a_valider émise pour les admins
+        self.assertTrue(Notification.objects.filter(type=TypeNotification.COMPTE_A_VALIDER, objet_id=res2.data['id']).exists())
+
+    def test_connexion_et_deconnexion_dynamique_requetes_authentifiees(self):
+        """
+        - paramètre à 1 -> un compte en_attente reçoit 403 COMPTE_NON_VALIDE à la connexion
+        - paramètre à 0 -> un compte en_attente peut se connecter
+        - requêtes authentifiées : si on réactive la validation (1), un compte encore en attente
+          est déconnecté (403 COMPTE_NON_VALIDE) à sa requête suivante
+        - token refresh : refusé si paramètre à 1
+        """
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        # Créer utilisateur en attente
+        user_attente = Utilisateur.objects.create_user(
+            telephone="+2250799000001",
+            email="attente@greengas.ci",
+            nom="Personnel Attente",
+            password="greengas2026",
+            role=Role.OPERATEUR_TRI,
+            statut_validation=StatutValidation.EN_ATTENTE
+        )
+
+        # 1. Paramètre à 1 -> connexion refusée 403
+        self.param.valeur = Decimal('1')
+        self.param.save()
+
+        res_login_bloque = self.client.post(
+            "/api/v1/auth/token/",
+            {"telephone": user_attente.telephone, "mot_de_passe": "greengas2026"},
+            format='json'
+        )
+        self.assertEqual(res_login_bloque.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(res_login_bloque.data['code'], "COMPTE_NON_VALIDE")
+
+        # 2. Paramètre à 0 -> connexion acceptée 200 avec jetons
+        self.param.valeur = Decimal('0')
+        self.param.save()
+
+        res_login_ok = self.client.post(
+            "/api/v1/auth/token/",
+            {"telephone": user_attente.telephone, "mot_de_passe": "greengas2026"},
+            format='json'
+        )
+        self.assertEqual(res_login_ok.status_code, status.HTTP_200_OK)
+        access_token = res_login_ok.data['access']
+        refresh_token = res_login_ok.data['refresh']
+
+        # 3. Requête authentifiée autorisée tant que paramètre à 0
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {access_token}")
+        res_moi = self.client.get("/api/v1/auth/moi/")
+        self.assertEqual(res_moi.status_code, status.HTTP_200_OK)
+
+        # 4. On réactive la validation (paramètre = 1) -> requête suivante rejetée 403
+        self.param.valeur = Decimal('1')
+        self.param.save()
+
+        res_moi_bloque = self.client.get("/api/v1/auth/moi/")
+        self.assertEqual(res_moi_bloque.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(res_moi_bloque.data['code'], "COMPTE_NON_VALIDE")
+
+        # 5. Rafraîchissement de token également rejeté 403
+        self.client.credentials()  # reset auth header
+        res_refresh = self.client.post(
+            "/api/v1/auth/token/rafraichir/",
+            {"refresh": refresh_token},
+            format='json'
+        )
+        self.assertEqual(res_refresh.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(res_refresh.data['code'], "COMPTE_NON_VALIDE")

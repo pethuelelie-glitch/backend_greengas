@@ -27,6 +27,7 @@ from apps.greenpoints.serializers import GreenPointsTransactionSerializer
 from apps.energie.models import ProductionEnergie
 from apps.energie.serializers import ProductionEnergieSerializer
 from apps.comptes.permissions import EstAdmin, EstAdminOuReferent
+from apps.comptes.exceptions import MetierException
 
 
 
@@ -211,6 +212,18 @@ class ParametreDetailUpdateView(APIView):
         ancienne_valeur = float(parametre.valeur)
         nouvelle_valeur = serializer.validated_data['valeur']
         motif = serializer.validated_data.get('motif', "Modification du paramètre système par l'administrateur")
+
+        if parametre.cle == 'validation_comptes_personnel':
+            try:
+                val_dec = Decimal(str(nouvelle_valeur))
+                if val_dec not in (Decimal('0'), Decimal('1')):
+                    raise ValueError()
+            except (ValueError, TypeError):
+                raise MetierException(
+                    code="PARAMETRE_INVALIDE",
+                    message="La valeur du paramètre 'validation_comptes_personnel' doit être 0 ou 1.",
+                    details={"valeur": float(nouvelle_valeur)}
+                )
 
         parametre.valeur = nouvelle_valeur
         parametre.date_modification = timezone.now()

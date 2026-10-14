@@ -24,13 +24,19 @@ load_dotenv(BASE_DIR / '.env')
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-@%p__^*gu-@a70+ucm#c)a!vymu=g1$p_f=w+(@8jm4_drhs3y'
+# SECURITY: Clé secrète lue depuis le fichier .env (aucune valeur par défaut codée en dur)
+SECRET_KEY = os.environ.get('SECRET_KEY')
+if not SECRET_KEY:
+    raise ValueError(
+        "ERREUR CRITIQUE DE SÉCURITÉ : La variable 'SECRET_KEY' est manquante ou vide dans votre fichier .env !"
+    )
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# Mode de débogage (lu depuis .env)
+DEBUG = os.environ.get('DEBUG', 'True').lower() in ('true', '1', 'yes', 't')
 
-ALLOWED_HOSTS = ['*']
+# Hôtes autorisés (lu depuis .env)
+_hosts = os.environ.get('ALLOWED_HOSTS', '*')
+ALLOWED_HOSTS = ['*'] if _hosts == '*' else [h.strip() for h in _hosts.split(',') if h.strip()]
 
 
 # Application definition
@@ -181,7 +187,7 @@ from datetime import timedelta
 REST_FRAMEWORK = {
     'COERCE_DECIMAL_TO_STRING': False,
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'apps.comptes.authentication.CustomJWTAuthentication',
     ),
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 50,

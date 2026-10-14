@@ -1,4 +1,3 @@
-from rest_framework.views import exception_handler
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.exceptions import APIException, ValidationError, NotAuthenticated, PermissionDenied, NotFound
@@ -60,7 +59,8 @@ def custom_exception_handler(exc, context):
     Gestionnaire universel d'exceptions conforme au contrat commun GREENGAS :
     { "code": "CODE_ERREUR", "message": "Message explicatif", "details": { ... } }
     """
-    response = exception_handler(exc, context)
+    from rest_framework.views import exception_handler as drf_exception_handler
+    response = drf_exception_handler(exc, context)
 
     if response is not None:
         code = "ERREUR"

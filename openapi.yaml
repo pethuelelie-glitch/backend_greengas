@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: GREENGAS API
-  version: 1.3.0
+  version: 1.5.0
   description: |
     Contrat d'API commun de GREENGAS (SIREXE Hackathon 2026, équipe DEDSEC).
     Ce fichier fait foi pour le backend Django, l'application Flutter et le Control Center (React / Electron).
@@ -109,9 +109,12 @@ paths:
       tags: [Auth]
       summary: Inscription d'un opérateur de tri ou d'un responsable méthanisation (Control Center)
       description: |
-        Depuis 1.3.0 : le compte est créé avec statut_validation = en_attente et AUCUN jeton n'est émis.
-        L'utilisateur ne peut pas se connecter (403 COMPTE_NON_VALIDE) tant qu'un administrateur n'a pas
-        validé le compte avec POST /utilisateurs/{id}/validation/.
+        Depuis 1.5.0 :
+        - Si validation_comptes_personnel = 1 : le compte est créé avec statut_validation = en_attente,
+          notification compte_a_valider envoyée aux administrateurs.
+        - Si validation_comptes_personnel = 0 : le compte est créé avec statut_validation = valide,
+          sans notification.
+        Dans tous les cas, aucun jeton n'est émis à la création.
         Téléphone et e-mail sont obligatoires ; chacun est unique (409 TELEPHONE_DEJA_UTILISE ou
         EMAIL_DEJA_UTILISE). L'e-mail est enregistré en minuscules.
         Seuls les rôles operateur_tri et responsable_methanisation sont acceptés ; tout autre rôle
@@ -1370,6 +1373,7 @@ components:
         - seuil_alerte_production_pct
         - ch4_min_pct
         - fenetre_lissage_jours
+        - validation_comptes_personnel
 
     # --------------------------------------------------------- UTILISATEURS
     Utilisateur:

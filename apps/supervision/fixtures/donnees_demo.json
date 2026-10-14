@@ -443,6 +443,15 @@
   ],
   "parametres": [
     {
+      "cle": "validation_comptes_personnel",
+      "valeur": 0,
+      "unite": "",
+      "statut": "aligne",
+      "description": "Validation des comptes du personnel par un administrateur (1 = activée, 0 = désactivée)",
+      "source": null,
+      "date_modification": "2026-09-01T08:00:00Z"
+    },
+    {
       "cle": "coefficient_filiere_organique",
       "valeur": 10,
       "unite": "points/kg",

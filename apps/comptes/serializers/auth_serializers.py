@@ -96,11 +96,14 @@ class ConnexionSerializer(serializers.Serializer):
             raise AuthenticationFailed(detail="Identifiant ou mot de passe incorrect.")
 
         # Vérification statut de validation et statut d'activation (403 COMPTE_NON_VALIDE)
+        from apps.comptes.utils import is_validation_personnel_active
+
         if user.statut_validation == StatutValidation.EN_ATTENTE:
-            raise CompteNonValideException(
-                message="Votre compte attend la validation d'un administrateur.",
-                details={"statut_validation": "en_attente"}
-            )
+            if is_validation_personnel_active():
+                raise CompteNonValideException(
+                    message="Votre compte attend la validation d'un administrateur.",
+                    details={"statut_validation": "en_attente"}
+                )
 
         if user.statut_validation == StatutValidation.REFUSE:
             raise CompteNonValideException(
@@ -202,36 +205,42 @@ class InscriptionPersonnelSerializer(serializers.Serializer):
         return value
 
     def create(self, validated_data):
+        from apps.comptes.utils import is_validation_personnel_active
+
+        val_active = is_validation_personnel_active()
+        statut_val = StatutValidation.EN_ATTENTE if val_active else StatutValidation.VALIDE
+
         utilisateur = Utilisateur.objects.create_user(
             telephone=validated_data['telephone'],
             email=validated_data['email'].strip().lower(),
             nom=validated_data['nom'],
             password=validated_data['mot_de_passe'],
             role=validated_data['role'],
-            statut_validation=StatutValidation.EN_ATTENTE,
+            statut_validation=statut_val,
             actif=True,
             telephone_verifie=True
         )
 
-        # Journaliser la demande dans JournalAudit
-        try:
-            from apps.supervision.models import JournalAudit, TypeObjet
-            JournalAudit.objects.create(
-                auteur=utilisateur,
-                action="utilisateur.demande_inscription",
-                objet_type=TypeObjet.UTILISATEUR,
-                objet_id=str(utilisateur.id),
-                nouvelle_valeur=json.dumps({
-                    "nom": utilisateur.nom,
-                    "telephone": utilisateur.telephone,
-                    "email": utilisateur.email,
-                    "role": utilisateur.role,
-                    "statut_validation": "en_attente"
-                }),
-                motif="Demande d'inscription personnel en attente de validation admin"
-            )
-        except Exception:
-            pass
+        # Journaliser la demande dans JournalAudit si en attente
+        if statut_val == StatutValidation.EN_ATTENTE:
+            try:
+                from apps.supervision.models import JournalAudit, TypeObjet
+                JournalAudit.objects.create(
+                    auteur=utilisateur,
+                    action="utilisateur.demande_inscription",
+                    objet_type=TypeObjet.UTILISATEUR,
+                    objet_id=str(utilisateur.id),
+                    nouvelle_valeur=json.dumps({
+                        "nom": utilisateur.nom,
+                        "telephone": utilisateur.telephone,
+                        "email": utilisateur.email,
+                        "role": utilisateur.role,
+                        "statut_validation": "en_attente"
+                    }),
+                    motif="Demande d'inscription personnel en attente de validation admin"
+                )
+            except Exception:
+                pass
 
         return utilisateur
 
@@ -283,11 +292,14 @@ class CustomTokenRefreshSerializer(serializers.Serializer):
         user = Utilisateur.objects.filter(id=user_id).first()
 
         if user:
+            from apps.comptes.utils import is_validation_personnel_active
+
             if user.statut_validation == StatutValidation.EN_ATTENTE:
-                raise CompteNonValideException(
-                    message="Votre compte attend la validation d'un administrateur.",
-                    details={"statut_validation": "en_attente"}
-                )
+                if is_validation_personnel_active():
+                    raise CompteNonValideException(
+                        message="Votre compte attend la validation d'un administrateur.",
+                        details={"statut_validation": "en_attente"}
+                    )
 
             if user.statut_validation == StatutValidation.REFUSE:
                 raise CompteNonValideException(

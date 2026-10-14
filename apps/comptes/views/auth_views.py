@@ -5,7 +5,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
 
-from apps.comptes.models import Utilisateur, CodeOTP
+from apps.comptes.models import Utilisateur, CodeOTP, Role, StatutValidation
 from apps.comptes.serializers import (
     UtilisateurSerializer,
     ConnexionSerializer,
@@ -115,23 +115,26 @@ class InscriptionPersonnelView(APIView):
         serializer.is_valid(raise_exception=True)
         utilisateur = serializer.save()
 
-        # Notification compte_a_valider à tous les administrateurs (Contrat 1.4.0)
-        try:
-            from apps.supervision.models import TypeNotification, NiveauNotification
-            from apps.supervision.services import notifier_utilisateurs
-            admins = Utilisateur.objects.filter(role=Role.ADMINISTRATEUR, actif=True)
-            role_label = dict(Role.choices).get(utilisateur.role, utilisateur.role).lower()
-            notifier_utilisateurs(
-                destinataires=admins,
-                type=TypeNotification.COMPTE_A_VALIDER,
-                niveau=NiveauNotification.ATTENTION,
-                titre="Compte à valider",
-                message=f"{utilisateur.nom} demande un accès {role_label}.",
-                objet_type="utilisateur",
-                objet_id=utilisateur.id
-            )
-        except Exception:
-            pass
+        # Notification compte_a_valider à tous les administrateurs (Contrat 1.4.0 & 1.5.0)
+        # Uniquement si validation_comptes_personnel == 1 et compte en attente
+        from apps.comptes.utils import is_validation_personnel_active
+        if is_validation_personnel_active() and utilisateur.statut_validation == StatutValidation.EN_ATTENTE:
+            try:
+                from apps.supervision.models import TypeNotification, NiveauNotification
+                from apps.supervision.services import notifier_utilisateurs
+                admins = Utilisateur.objects.filter(role=Role.ADMINISTRATEUR, actif=True)
+                role_label = dict(Role.choices).get(utilisateur.role, utilisateur.role).lower()
+                notifier_utilisateurs(
+                    destinataires=admins,
+                    type=TypeNotification.COMPTE_A_VALIDER,
+                    niveau=NiveauNotification.ATTENTION,
+                    titre="Compte à valider",
+                    message=f"{utilisateur.nom} demande un accès {role_label}.",
+                    objet_type="utilisateur",
+                    objet_id=utilisateur.id
+                )
+            except Exception:
+                pass
 
         return Response(
             UtilisateurSerializer(utilisateur).data,

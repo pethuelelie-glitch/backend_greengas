@@ -408,9 +408,15 @@ class Command(BaseCommand):
                         }
                     )
 
+            from apps.comptes.utils import is_validation_personnel_active
+            val_active = is_validation_personnel_active()
+
             # Administrateurs : compte_a_valider, collecte_a_verifier, bac_surinscrit
+            if not val_active and ibrahim:
+                Notification.objects.filter(type=TypeNotification.COMPTE_A_VALIDER, objet_id=ibrahim.id).delete()
+
             for adm in admins:
-                if ibrahim:
+                if ibrahim and val_active:
                     Notification.objects.update_or_create(
                         destinataire=adm,
                         type=TypeNotification.COMPTE_A_VALIDER,
