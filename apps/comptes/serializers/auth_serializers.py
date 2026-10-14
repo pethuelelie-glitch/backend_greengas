@@ -3,6 +3,7 @@ import json
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth import authenticate
+from django.db import transaction
 from apps.comptes.models import Utilisateur, Role, StatutValidation, CodeOTP
 from apps.comptes.exceptions import ConflitException, MetierException
 from apps.referentiel.models import Bac
@@ -138,6 +139,7 @@ class InscriptionPersonnelSerializer(serializers.Serializer):
             raise serializers.ValidationError("Le rôle doit être 'operateur_tri' ou 'responsable_methanisation'.")
         return value
 
+    @transaction.atomic
     def create(self, validated_data):
         utilisateur = Utilisateur.objects.create_user(
             telephone=validated_data['telephone'],
@@ -149,22 +151,19 @@ class InscriptionPersonnelSerializer(serializers.Serializer):
         )
 
         # Journaliser l'inscription dans JournalAudit
-        try:
-            from apps.supervision.models import JournalAudit, TypeObjet
-            JournalAudit.objects.create(
-                auteur=utilisateur,
-                action="utilisateur.inscrire",
-                objet_type=TypeObjet.UTILISATEUR,
-                objet_id=str(utilisateur.id),
-                nouvelle_valeur=json.dumps({
-                    "nom": utilisateur.nom,
-                    "telephone": utilisateur.telephone,
-                    "role": utilisateur.role
-                }),
-                motif="Inscription personnel via Control Center"
-            )
-        except Exception:
-            pass
+        from apps.supervision.models import JournalAudit, TypeObjet
+        JournalAudit.objects.create(
+            auteur=utilisateur,
+            action="utilisateur.inscrire",
+            objet_type=TypeObjet.UTILISATEUR,
+            objet_id=str(utilisateur.id),
+            nouvelle_valeur=json.dumps({
+                "nom": utilisateur.nom,
+                "telephone": utilisateur.telephone,
+                "role": utilisateur.role
+            }),
+            motif="Inscription personnel via Control Center"
+        )
 
         return utilisateur
 

@@ -6,6 +6,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from apps.comptes.models import Utilisateur, CodeOTP
+from apps.comptes.permissions import EstAdmin
 from apps.comptes.serializers import (
     UtilisateurSerializer,
     ConnexionSerializer,
@@ -76,7 +77,7 @@ class InscriptionPersonnelView(APIView):
     Inscription d'un opérateur de tri ou d'un responsable méthanisation (Control Center).
     Contrat 1.1.0 — Renvoie statut 201 avec les Jetons (access, refresh, utilisateur).
     """
-    permission_classes = [AllowAny]
+    permission_classes = [EstAdmin]
 
     def post(self, request):
         from apps.comptes.serializers import InscriptionPersonnelSerializer

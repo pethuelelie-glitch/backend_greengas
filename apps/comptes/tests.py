@@ -1,10 +1,13 @@
 from decimal import Decimal
 from django.test import TestCase
+from unittest.mock import patch
 from rest_framework.test import APIClient
 from rest_framework import status
 
 from apps.comptes.models import Utilisateur, Role, StatutValidation, CodeOTP
 from apps.referentiel.models import Site, Secteur, Bac
+from apps.supervision.models import JournalAudit
+from apps.comptes.serializers import InscriptionPersonnelSerializer
 
 
 class ComptesEndpointsTestCase(TestCase):
@@ -98,10 +101,29 @@ class ComptesEndpointsTestCase(TestCase):
             "mot_de_passe": "Password123!",
             "role": "operateur_tri"
         }
+        res_anonyme = self.client.post("/api/v1/auth/inscription/personnel/", payload, format='json')
+        self.assertEqual(res_anonyme.status_code, status.HTTP_401_UNAUTHORIZED)
+
+        citoyen = Utilisateur.objects.create_user(
+            telephone="+2250700000004",
+            nom="Citoyen",
+            password="password123",
+            role=Role.CITOYEN,
+        )
+        self.client.force_authenticate(user=citoyen)
+        res_citoyen = self.client.post("/api/v1/auth/inscription/personnel/", payload, format='json')
+        self.assertEqual(res_citoyen.status_code, status.HTTP_403_FORBIDDEN)
+
+        self.client.force_authenticate(user=self.admin)
         res = self.client.post("/api/v1/auth/inscription/personnel/", payload, format='json')
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
         self.assertIn('access', res.data)
         self.assertIn('refresh', res.data)
+        self.assertTrue(Utilisateur.objects.filter(telephone=payload['telephone']).exists())
+        self.assertTrue(JournalAudit.objects.filter(
+            action="utilisateur.inscrire",
+            objet_id=str(res.data['utilisateur']['id']),
+        ).exists())
 
         # Rôle citoyen ou admin refusé -> 400
         payload_invalide = {
@@ -112,6 +134,22 @@ class ComptesEndpointsTestCase(TestCase):
         }
         res_err = self.client.post("/api/v1/auth/inscription/personnel/", payload_invalide, format='json')
         self.assertEqual(res_err.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_inscription_personnel_est_annulee_si_audit_echoue(self):
+        payload = {
+            "telephone": "+2250700000005",
+            "nom": "Personnel sans audit",
+            "mot_de_passe": "Password123!",
+            "role": Role.OPERATEUR_TRI,
+        }
+        serializer = InscriptionPersonnelSerializer(data=payload)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+        with patch.object(JournalAudit.objects, 'create', side_effect=RuntimeError("audit indisponible")):
+            with self.assertRaises(RuntimeError):
+                serializer.save()
+
+        self.assertFalse(Utilisateur.objects.filter(telephone=payload['telephone']).exists())
 
     def test_connexion_jwt_et_moi(self):
         # Connexion

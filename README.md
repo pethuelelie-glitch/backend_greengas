@@ -115,10 +115,24 @@ python manage.py migrate
 python manage.py createsuperuser
 ```
 
-### 6. Lancer l'ensemble des tests automatisés (37 tests)
+### 6. Lancer l'ensemble des tests automatisés (45 tests)
 ```bash
 python manage.py test apps.comptes.tests apps.referentiel.tests apps.collecte.tests apps.tri.tests apps.greenpoints.tests apps.energie.tests apps.supervision.tests apps.simulateur.tests
 ```
+
+### Configuration de production
+
+Fournir ces variables au processus Django (ne pas utiliser la clé de développement) :
+
+```text
+DJANGO_DEBUG=False
+DJANGO_SECRET_KEY=<clé aléatoire longue et secrète>
+DJANGO_ALLOWED_HOSTS=api.example.com
+DJANGO_CORS_ALLOWED_ORIGINS=https://app.example.com
+DJANGO_CSRF_TRUSTED_ORIGINS=https://app.example.com
+```
+
+Avec `DJANGO_DEBUG=False`, HTTPS, HSTS et les cookies sécurisés sont activés. Le proxy ou l'hébergeur doit terminer TLS et transmettre les requêtes HTTPS correctement à Django.
 
 ### 7. Lancer le serveur de développement
 ```bash
