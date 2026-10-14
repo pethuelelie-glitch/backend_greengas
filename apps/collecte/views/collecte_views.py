@@ -17,7 +17,7 @@ from apps.collecte.serializers import (
 )
 from apps.collecte.utils import get_parametre
 from apps.comptes.exceptions import MetierException
-from apps.comptes.models import Role
+from apps.comptes.models import Role, Utilisateur
 from apps.comptes.permissions import EstAdminOuReferent
 from apps.supervision.models import JournalAudit, TypeObjet
 
@@ -156,6 +156,27 @@ class CollecteValiderView(APIView):
         collecte.bac.date_derniere_collecte = now
         collecte.bac.save(update_fields=['date_derniere_collecte'])
 
+        # Notification collecte_a_verifier si statut de contrôle a_verifier (Contrat 1.4.0)
+        if statut_controle == StatutControle.A_VERIFIER:
+            try:
+                from apps.supervision.models import TypeNotification, NiveauNotification
+                from apps.supervision.services import notifier_utilisateurs
+                admins = list(Utilisateur.objects.filter(role=Role.ADMINISTRATEUR, actif=True))
+                referents = list(Utilisateur.objects.filter(bac=collecte.bac, role=Role.REFERENT, actif=True))
+                dest = list({u.id: u for u in (admins + referents)}.values())
+                notifier_utilisateurs(
+                    destinataires=dest,
+                    type=TypeNotification.COLLECTE_A_VERIFIER,
+                    niveau=NiveauNotification.ATTENTION,
+                    titre="Collecte à vérifier",
+                    message=f"{collecte.bac.code} : {poids_net:.0f} kg pour {scans_valides} scans ({kg_par_scan:.2f} kg/scan).",
+                    objet_type="collecte",
+                    objet_id=collecte.id,
+                    auteur=request.user
+                )
+            except Exception:
+                pass
+
         return Response(CollecteSerializer(collecte).data, status=status.HTTP_200_OK)
 
 
@@ -206,13 +227,43 @@ class CollecteDecisionView(APIView):
             motif=motif or f"Décision administrative : {decision}"
         )
 
-        # Synchronisation des transactions GreenPoints rattachées si existantes
+        # Synchronisation des transactions GreenPoints rattachées et notifications citoyen (Contrat 1.4.0)
         try:
             from apps.greenpoints.models import GreenPointsTransaction, StatutTransaction
+            from apps.supervision.models import TypeNotification, NiveauNotification
+            from apps.supervision.services import creer_notification
+            date_str = collecte.tournee.date.strftime('%d/%m') if collecte.tournee else "récente"
+
             if decision == 'valider_points':
-                collecte.transactions_points.filter(statut=StatutTransaction.EN_ATTENTE).update(statut=StatutTransaction.CREDITEE)
+                tx_qs = collecte.transactions_points.filter(statut=StatutTransaction.EN_ATTENTE)
+                for tx in tx_qs:
+                    tx.statut = StatutTransaction.CREDITEE
+                    tx.save(update_fields=['statut'])
+                    creer_notification(
+                        destinataire=tx.citoyen,
+                        type=TypeNotification.POINTS_CREDITES,
+                        niveau=NiveauNotification.INFO,
+                        titre="Points crédités",
+                        message=f"+{tx.points} points pour la collecte du {date_str} ({collecte.bac.code}).",
+                        objet_type="transaction",
+                        objet_id=tx.id,
+                        auteur=request.user
+                    )
             elif decision == 'annuler_points':
-                collecte.transactions_points.exclude(statut=StatutTransaction.ANNULEE).update(statut=StatutTransaction.ANNULEE)
+                tx_qs = collecte.transactions_points.exclude(statut=StatutTransaction.ANNULEE)
+                for tx in tx_qs:
+                    tx.statut = StatutTransaction.ANNULEE
+                    tx.save(update_fields=['statut'])
+                    creer_notification(
+                        destinataire=tx.citoyen,
+                        type=TypeNotification.POINTS_ANNULES,
+                        niveau=NiveauNotification.ATTENTION,
+                        titre="Points annulés",
+                        message=f"{tx.points} points annulés après vérification ({collecte.bac.code}).",
+                        objet_type="transaction",
+                        objet_id=tx.id,
+                        auteur=request.user
+                    )
         except Exception:
             pass
 

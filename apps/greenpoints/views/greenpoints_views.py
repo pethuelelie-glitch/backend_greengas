@@ -281,4 +281,20 @@ class EchangeListCreateView(generics.ListCreateAPIView):
                 motif=f"Échange de {recompense.cout_points} GreenPoints contre {recompense.nom}"
             )
 
+            # Notification echange_effectue au citoyen (Contrat 1.4.0)
+            try:
+                from apps.supervision.models import TypeNotification, NiveauNotification
+                from apps.supervision.services import creer_notification
+                creer_notification(
+                    destinataire=request.user,
+                    type=TypeNotification.ECHANGE_EFFECTUE,
+                    niveau=NiveauNotification.INFO,
+                    titre="Récompense échangée",
+                    message=f"{recompense.nom} échangé contre {recompense.cout_points} points.",
+                    objet_type=None,
+                    objet_id=None
+                )
+            except Exception:
+                pass
+
         return Response(EchangeSerializer(echange).data, status=status.HTTP_201_CREATED)

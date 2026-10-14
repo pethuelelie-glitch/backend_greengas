@@ -7,6 +7,7 @@ from .supervision_serializers import (
     EtapeTracabiliteSerializer,
     TracabiliteBacSerializer,
 )
+from .notification_serializers import NotificationSerializer
 
 __all__ = [
     'ParametreSerializer',
@@ -16,5 +17,6 @@ __all__ = [
     'CitoyenTracabiliteSerializer',
     'EtapeTracabiliteSerializer',
     'TracabiliteBacSerializer',
+    'NotificationSerializer',
 ]
 

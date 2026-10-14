@@ -5,6 +5,12 @@ from .supervision_views import (
     JournalAuditListView,
     BacTracabiliteView,
 )
+from .notification_views import (
+    NotificationListView,
+    NotificationCompteurView,
+    NotificationMarquerLueView,
+    NotificationToutLireView,
+)
 
 __all__ = [
     'VerificationQueueView',
@@ -12,5 +18,9 @@ __all__ = [
     'ParametreDetailUpdateView',
     'JournalAuditListView',
     'BacTracabiliteView',
+    'NotificationListView',
+    'NotificationCompteurView',
+    'NotificationMarquerLueView',
+    'NotificationToutLireView',
 ]
 

@@ -299,6 +299,36 @@ class TourneeTriView(APIView):
                         )
                         transactions_creees.append(tx)
 
+                        # Notification au citoyen (Contrat 1.4.0)
+                        try:
+                            from apps.supervision.models import TypeNotification, NiveauNotification
+                            from apps.supervision.services import creer_notification
+                            date_str = tournee.date.strftime('%d/%m')
+                            if statut_tx == StatutTransaction.CREDITEE:
+                                creer_notification(
+                                    destinataire=tx.citoyen,
+                                    type=TypeNotification.POINTS_CREDITES,
+                                    niveau=NiveauNotification.INFO,
+                                    titre="Points crédités",
+                                    message=f"+{pts_val} points pour la collecte du {date_str} ({collecte.bac.code}).",
+                                    objet_type="transaction",
+                                    objet_id=tx.id,
+                                    auteur=request.user
+                                )
+                            elif statut_tx == StatutTransaction.EN_ATTENTE:
+                                creer_notification(
+                                    destinataire=tx.citoyen,
+                                    type=TypeNotification.POINTS_EN_ATTENTE,
+                                    niveau=NiveauNotification.INFO,
+                                    titre="Points en attente",
+                                    message=f"{pts_val} points en attente de vérification ({collecte.bac.code}).",
+                                    objet_type="transaction",
+                                    objet_id=tx.id,
+                                    auteur=request.user
+                                )
+                        except Exception:
+                            pass
+
             # E. Mise à jour de la tournée
             tournee.statut = StatutTournee.TRIEE
             tournee.niveau_contamination = niveau_contamination

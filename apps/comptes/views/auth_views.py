@@ -70,6 +70,29 @@ class InscriptionCitoyenView(APIView):
         refresh['role'] = utilisateur.role
         refresh['nom'] = utilisateur.nom
 
+        # Notification bac_surinscrit si le bac dépasse ses foyers déclarés (Contrat 1.4.0)
+        try:
+            if utilisateur.bac:
+                bac = utilisateur.bac
+                nb_citoyens = Utilisateur.objects.filter(bac=bac, role=Role.CITOYEN, actif=True).count()
+                if bac.nb_foyers_declares and nb_citoyens > bac.nb_foyers_declares:
+                    from apps.supervision.models import TypeNotification, NiveauNotification
+                    from apps.supervision.services import notifier_utilisateurs
+                    admins = list(Utilisateur.objects.filter(role=Role.ADMINISTRATEUR, actif=True))
+                    referents = list(Utilisateur.objects.filter(bac=bac, role=Role.REFERENT, actif=True))
+                    dest = list({u.id: u for u in (admins + referents)}.values())
+                    notifier_utilisateurs(
+                        destinataires=dest,
+                        type=TypeNotification.BAC_SURINSCRIT,
+                        niveau=NiveauNotification.INFO,
+                        titre="Bac surinscrit",
+                        message=f"{bac.code} : {nb_citoyens} comptes pour {bac.nb_foyers_declares} foyers.",
+                        objet_type="bac",
+                        objet_id=bac.id
+                    )
+        except Exception:
+            pass
+
         return Response({
             "access": str(refresh.access_token),
             "refresh": str(refresh),
@@ -91,6 +114,24 @@ class InscriptionPersonnelView(APIView):
         serializer = InscriptionPersonnelSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         utilisateur = serializer.save()
+
+        # Notification compte_a_valider à tous les administrateurs (Contrat 1.4.0)
+        try:
+            from apps.supervision.models import TypeNotification, NiveauNotification
+            from apps.supervision.services import notifier_utilisateurs
+            admins = Utilisateur.objects.filter(role=Role.ADMINISTRATEUR, actif=True)
+            role_label = dict(Role.choices).get(utilisateur.role, utilisateur.role).lower()
+            notifier_utilisateurs(
+                destinataires=admins,
+                type=TypeNotification.COMPTE_A_VALIDER,
+                niveau=NiveauNotification.ATTENTION,
+                titre="Compte à valider",
+                message=f"{utilisateur.nom} demande un accès {role_label}.",
+                objet_type="utilisateur",
+                objet_id=utilisateur.id
+            )
+        except Exception:
+            pass
 
         return Response(
             UtilisateurSerializer(utilisateur).data,

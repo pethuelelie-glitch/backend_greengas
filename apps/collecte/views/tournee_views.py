@@ -119,6 +119,24 @@ class TourneeListCreateView(generics.ListCreateAPIView):
                 statut=StatutCollecte.EN_ATTENTE_PESEE
             )
 
+        # Notification tournee_planifiee au collecteur assigné (Contrat 1.4.0)
+        try:
+            from apps.supervision.models import TypeNotification, NiveauNotification
+            from apps.supervision.services import creer_notification
+            nb_bacs = len(bacs)
+            creer_notification(
+                destinataire=collecteur,
+                type=TypeNotification.TOURNEE_PLANIFIEE,
+                niveau=NiveauNotification.INFO,
+                titre="Tournée planifiée",
+                message=f"Nouvelle tournée {tournee.code} le {date_val.strftime('%d/%m')} ({secteur.code}, {nb_bacs} bacs).",
+                objet_type="tournee",
+                objet_id=tournee.id,
+                auteur=request.user
+            )
+        except Exception:
+            pass
+
         return Response(TourneeDetailSerializer(tournee).data, status=status.HTTP_201_CREATED)
 
 
@@ -273,4 +291,24 @@ class TourneeCloturerView(APIView):
 
         tournee.statut = StatutTournee.COLLECTEE
         tournee.save(update_fields=['statut'])
+
+        # Notification tournee_a_trier à tous les opérateurs de tri (Contrat 1.4.0)
+        try:
+            from apps.supervision.models import TypeNotification, NiveauNotification
+            from apps.supervision.services import notifier_utilisateurs
+            poids_total = sum((c.poids_net_kg or 0) for c in collectes)
+            operateurs = Utilisateur.objects.filter(role=Role.OPERATEUR_TRI, actif=True, statut_validation='valide')
+            notifier_utilisateurs(
+                destinataires=operateurs,
+                type=TypeNotification.TOURNEE_A_TRIER,
+                niveau=NiveauNotification.INFO,
+                titre="Tournée à trier",
+                message=f"{tournee.code} ({tournee.secteur.code}, {poids_total:.0f} kg) attend son tri.",
+                objet_type="tournee",
+                objet_id=tournee.id,
+                auteur=request.user
+            )
+        except Exception:
+            pass
+
         return Response(TourneeDetailSerializer(tournee).data, status=status.HTTP_200_OK)

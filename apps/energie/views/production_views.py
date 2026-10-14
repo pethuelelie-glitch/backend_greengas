@@ -286,8 +286,27 @@ class SiteMesuresView(APIView):
                 alerte_prod.description = desc_prod
                 alerte_prod.date_derniere_occurrence = timezone.now()
                 alerte_prod.save()
+
+                # Notification alerte_repetee (Contrat 1.4.0)
+                try:
+                    from apps.comptes.models import Role, Utilisateur
+                    from apps.supervision.models import TypeNotification, NiveauNotification
+                    from apps.supervision.services import notifier_utilisateurs
+                    dest = Utilisateur.objects.filter(role=Role.RESPONSABLE_METHANISATION, actif=True, statut_validation='valide')
+                    notifier_utilisateurs(
+                        destinataires=dest,
+                        type=TypeNotification.ALERTE_REPETEE,
+                        niveau=NiveauNotification.ATTENTION,
+                        titre="Alerte répétée",
+                        message=f"{site.code} : l'écart continue ({alerte_prod.nb_occurrences} jours).",
+                        objet_type="alerte",
+                        objet_id=alerte_prod.id,
+                        auteur=request.user
+                    )
+                except Exception:
+                    pass
             else:
-                Alerte.objects.create(
+                alerte_prod = Alerte.objects.create(
                     site=site,
                     type=TypeAlerte.PRODUCTION,
                     statut=StatutAlerte.OUVERTE,
@@ -297,6 +316,26 @@ class SiteMesuresView(APIView):
                     description=desc_prod,
                     nb_occurrences=1
                 )
+
+                # Notification alerte_ouverte (Contrat 1.4.0)
+                try:
+                    from apps.comptes.models import Role, Utilisateur
+                    from apps.supervision.models import TypeNotification, NiveauNotification
+                    from apps.supervision.services import notifier_utilisateurs
+                    dest = Utilisateur.objects.filter(role__in=[Role.RESPONSABLE_METHANISATION, Role.ADMINISTRATEUR], actif=True, statut_validation='valide')
+                    signe = f"{ecart_pct:.0f} %" if ecart_pct < 0 else f"+{ecart_pct:.0f} %"
+                    notifier_utilisateurs(
+                        destinataires=dest,
+                        type=TypeNotification.ALERTE_OUVERTE,
+                        niveau=NiveauNotification.CRITIQUE,
+                        titre="Alerte ouverte",
+                        message=f"{site.code} : biogaz {signe} ({biogaz_mesure} m³ pour {production.biogaz_attendu_m3} m³ attendus).",
+                        objet_type="alerte",
+                        objet_id=alerte_prod.id,
+                        auteur=request.user
+                    )
+                except Exception:
+                    pass
 
         # Vérification Alerte 2 : Teneur en CH4 < 50 %
         if ch4_pct < Decimal('50.0'):
@@ -318,8 +357,27 @@ class SiteMesuresView(APIView):
                 alerte_comp.description = desc_ch4
                 alerte_comp.date_derniere_occurrence = timezone.now()
                 alerte_comp.save()
+
+                # Notification alerte_repetee (Contrat 1.4.0)
+                try:
+                    from apps.comptes.models import Role, Utilisateur
+                    from apps.supervision.models import TypeNotification, NiveauNotification
+                    from apps.supervision.services import notifier_utilisateurs
+                    dest = Utilisateur.objects.filter(role=Role.RESPONSABLE_METHANISATION, actif=True, statut_validation='valide')
+                    notifier_utilisateurs(
+                        destinataires=dest,
+                        type=TypeNotification.ALERTE_REPETEE,
+                        niveau=NiveauNotification.ATTENTION,
+                        titre="Alerte répétée",
+                        message=f"{site.code} : teneur CH₄ basse ({ch4_pct} %, {alerte_comp.nb_occurrences} occurrences).",
+                        objet_type="alerte",
+                        objet_id=alerte_comp.id,
+                        auteur=request.user
+                    )
+                except Exception:
+                    pass
             else:
-                Alerte.objects.create(
+                alerte_comp = Alerte.objects.create(
                     site=site,
                     type=TypeAlerte.COMPOSITION,
                     statut=StatutAlerte.OUVERTE,
@@ -329,6 +387,25 @@ class SiteMesuresView(APIView):
                     description=desc_ch4,
                     nb_occurrences=1
                 )
+
+                # Notification alerte_ouverte (Contrat 1.4.0)
+                try:
+                    from apps.comptes.models import Role, Utilisateur
+                    from apps.supervision.models import TypeNotification, NiveauNotification
+                    from apps.supervision.services import notifier_utilisateurs
+                    dest = Utilisateur.objects.filter(role__in=[Role.RESPONSABLE_METHANISATION, Role.ADMINISTRATEUR], actif=True, statut_validation='valide')
+                    notifier_utilisateurs(
+                        destinataires=dest,
+                        type=TypeNotification.ALERTE_OUVERTE,
+                        niveau=NiveauNotification.CRITIQUE,
+                        titre="Alerte ouverte",
+                        message=f"{site.code} : teneur CH₄ critique ({ch4_pct} % < 50 %).",
+                        objet_type="alerte",
+                        objet_id=alerte_comp.id,
+                        auteur=request.user
+                    )
+                except Exception:
+                    pass
 
         if a_declenche_alerte and site.statut != 'alerte':
             site.statut = 'alerte'

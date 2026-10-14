@@ -364,4 +364,95 @@ class Command(BaseCommand):
                     )
                     self.stdout.write(self.style.SUCCESS("  [OK] Transactions GreenPoints initialisees pour les citoyens de test"))
 
+            # 13. Notifications initiales de démonstration (Contrat 1.4.0)
+            from apps.supervision.models import Notification, TypeNotification, NiveauNotification
+            from apps.comptes.models import Role
+            date_notif = parse_datetime('2026-09-12T09:00:00Z')
+
+            operateurs_tri = Utilisateur.objects.filter(role=Role.OPERATEUR_TRI, actif=True, statut_validation='valide')
+            trn1 = Tournee.objects.filter(code='TRN-0912-01').first()
+            trn2 = Tournee.objects.filter(code='TRN-0912-02').first()
+            admins = Utilisateur.objects.filter(role=Role.ADMINISTRATEUR, actif=True)
+            ibrahim = Utilisateur.objects.filter(telephone='+2250700000008').first()
+            bac22 = Bac.objects.filter(code='BAC-022').first()
+            coll_bac22 = Collecte.objects.filter(bac__code='BAC-022').order_by('-date_ouverture').first()
+
+            # Opérateurs de tri actifs (Aya) : tournee_a_trier pour TRN-0912-01 et TRN-0912-02
+            for op in operateurs_tri:
+                if trn1:
+                    Notification.objects.update_or_create(
+                        destinataire=op,
+                        type=TypeNotification.TOURNEE_A_TRIER,
+                        objet_id=trn1.id,
+                        defaults={
+                            'niveau': NiveauNotification.INFO,
+                            'titre': "Tournée à trier",
+                            'message': f"{trn1.code} ({trn1.secteur.code}, 500 kg) attend son tri.",
+                            'objet_type': 'tournee',
+                            'lue': False,
+                            'date_creation': date_notif
+                        }
+                    )
+                if trn2:
+                    Notification.objects.update_or_create(
+                        destinataire=op,
+                        type=TypeNotification.TOURNEE_A_TRIER,
+                        objet_id=trn2.id,
+                        defaults={
+                            'niveau': NiveauNotification.INFO,
+                            'titre': "Tournée à trier",
+                            'message': f"{trn2.code} ({trn2.secteur.code}, 400 kg) attend son tri.",
+                            'objet_type': 'tournee',
+                            'lue': False,
+                            'date_creation': date_notif
+                        }
+                    )
+
+            # Administrateurs : compte_a_valider, collecte_a_verifier, bac_surinscrit
+            for adm in admins:
+                if ibrahim:
+                    Notification.objects.update_or_create(
+                        destinataire=adm,
+                        type=TypeNotification.COMPTE_A_VALIDER,
+                        objet_id=ibrahim.id,
+                        defaults={
+                            'niveau': NiveauNotification.ATTENTION,
+                            'titre': "Compte à valider",
+                            'message': f"{ibrahim.nom} demande un accès opérateur de tri.",
+                            'objet_type': 'utilisateur',
+                            'lue': False,
+                            'date_creation': date_notif
+                        }
+                    )
+                if coll_bac22:
+                    Notification.objects.update_or_create(
+                        destinataire=adm,
+                        type=TypeNotification.COLLECTE_A_VERIFIER,
+                        objet_id=coll_bac22.id,
+                        defaults={
+                            'niveau': NiveauNotification.ATTENTION,
+                            'titre': "Collecte à vérifier",
+                            'message': "BAC-022 : 2 kg pour 40 scans (0,05 kg/scan).",
+                            'objet_type': 'collecte',
+                            'lue': False,
+                            'date_creation': date_notif
+                        }
+                    )
+                if bac22:
+                    Notification.objects.update_or_create(
+                        destinataire=adm,
+                        type=TypeNotification.BAC_SURINSCRIT,
+                        objet_id=bac22.id,
+                        defaults={
+                            'niveau': NiveauNotification.INFO,
+                            'titre': "Bac surinscrit",
+                            'message': "BAC-022 : 5 comptes pour 4 foyers.",
+                            'objet_type': 'bac',
+                            'lue': False,
+                            'date_creation': date_notif
+                        }
+                    )
+
+            self.stdout.write(self.style.SUCCESS("  [OK] Notifications initiales de demonstration creees"))
+
         self.stdout.write(self.style.SUCCESS("\n[SUCCES] Toutes les donnees de demonstration ont ete chargees avec succes !"))

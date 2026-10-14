@@ -5,6 +5,10 @@ from apps.supervision.views import (
     ParametreDetailUpdateView,
     JournalAuditListView,
     BacTracabiliteView,
+    NotificationListView,
+    NotificationCompteurView,
+    NotificationMarquerLueView,
+    NotificationToutLireView,
 )
 
 urlpatterns = [
@@ -20,5 +24,11 @@ urlpatterns = [
 
     # Traçabilité d'un bac (/api/v1/bacs/{id}/tracabilite/)
     path('bacs/<uuid:id>/tracabilite/', BacTracabiliteView.as_view(), name='bac_tracabilite'),
+
+    # Notifications (/api/v1/notifications/...) — Contrat 1.4.0
+    path('notifications/', NotificationListView.as_view(), name='notifications_list'),
+    path('notifications/compteur/', NotificationCompteurView.as_view(), name='notifications_compteur'),
+    path('notifications/<uuid:id>/lue/', NotificationMarquerLueView.as_view(), name='notification_marquer_lue'),
+    path('notifications/tout-lire/', NotificationToutLireView.as_view(), name='notifications_tout_lire'),
 ]
 
