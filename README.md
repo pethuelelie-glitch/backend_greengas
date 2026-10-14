@@ -117,18 +117,25 @@ python manage.py createsuperuser
 
 ### Configuration de production
 
-Dans le fichier `.env`, définir une clé aléatoire longue (`SECRET_KEY`), `DEBUG=False`,
-`ALLOWED_HOSTS` avec le nom d'hôte de l'API, et `CORS_ALLOWED_ORIGINS` avec les origines
+En production, définir une clé aléatoire longue (`SECRET_KEY`), `DEBUG=False`,
+`ALLOWED_HOSTS` avec le nom d'hôte de l'API et `CORS_ALLOWED_ORIGINS` avec les origines
 HTTPS du Control Center. Configurer `CSRF_TRUSTED_ORIGINS` pour les interfaces qui utilisent
-les cookies de session. Avec `DEBUG=False`, HTTPS, HSTS et les cookies sécurisés sont activés
-par défaut.
-Le proxy ou l'hébergeur doit terminer TLS et transmettre correctement les requêtes HTTPS.
+les cookies de session. HTTPS (redirection) et les cookies sécurisés sont activés par défaut.
+Choisir explicitement `DB_ENGINE=mysql` ou `DB_ENGINE=postgresql` et fournir `DB_NAME`,
+`DB_USER`, `DB_PASSWORD` et `DB_HOST`. Le démarrage refuse les identifiants absents, un moteur
+inconnu et SQLite en production. `psycopg` et Gunicorn sont inclus dans `requirements.txt`.
+
+Le proxy ou l'hébergeur doit terminer TLS. Définir `TRUST_X_FORWARDED_PROTO=True` uniquement
+si ce proxy supprime l'en-tête client et transmet lui-même `X-Forwarded-Proto: https`; sinon
+la redirection HTTPS ne peut pas reconnaître la connexion TLS terminée en amont. HSTS est
+configurable avec `SECURE_HSTS_SECONDS`; l'inclusion des sous-domaines et le préchargement
+sont désactivés jusqu'à validation de tous les domaines concernés.
 
 Les demandes publiques de comptes personnel restent possibles lorsque la validation
 administrateur est activée. Si elle est désactivée, seule une session administrateur peut créer
 ces comptes. Les données de démonstration activent cette validation par défaut.
 
-### 6. Lancer l'ensemble des tests automatisés (57 tests)
+### 6. Lancer l'ensemble des tests automatisés (58 tests)
 ```bash
 python manage.py test apps.comptes.tests apps.referentiel.tests apps.collecte.tests apps.tri.tests apps.greenpoints.tests apps.energie.tests apps.supervision.tests apps.simulateur.tests
 ```
