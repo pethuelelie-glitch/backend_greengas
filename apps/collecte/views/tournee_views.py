@@ -16,7 +16,7 @@ from apps.collecte.serializers import (
     CollecteSerializer,
 )
 from apps.comptes.exceptions import MetierException, ConflitException
-from apps.comptes.models import Role
+from apps.comptes.models import Role, Utilisateur
 from apps.comptes.permissions import EstAdmin
 from apps.referentiel.models import Bac, StatutBac, StatutSite
 
@@ -40,10 +40,14 @@ class TourneeListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        if user.role == Role.COLLECTEUR:
-            queryset = Tournee.objects.filter(collecteur=user)
-        else:
+        if user.role == Role.ADMINISTRATEUR or user.is_superuser:
             queryset = Tournee.objects.all()
+        elif user.role == Role.COLLECTEUR:
+            queryset = Tournee.objects.filter(collecteur=user)
+        elif user.role == Role.REFERENT and user.bac_id:
+            queryset = Tournee.objects.filter(secteur_id=user.bac.secteur_id)
+        else:
+            queryset = Tournee.objects.none()
 
         date_val = self.request.query_params.get('date')
         if date_val:
@@ -144,10 +148,19 @@ class TourneeDetailView(generics.RetrieveAPIView):
     """
     GET /api/v1/tournees/{id}/ — Détail d'une tournée avec ses bacs et collectes.
     """
-    queryset = Tournee.objects.all()
     serializer_class = TourneeDetailSerializer
     permission_classes = [IsAuthenticated]
     lookup_field = 'id'
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.role == Role.ADMINISTRATEUR or user.is_superuser:
+            return Tournee.objects.all()
+        if user.role == Role.COLLECTEUR:
+            return Tournee.objects.filter(collecteur=user)
+        if user.role == Role.REFERENT and user.bac_id:
+            return Tournee.objects.filter(secteur_id=user.bac.secteur_id)
+        return Tournee.objects.none()
 
     def get_object(self):
         obj = super().get_object()
@@ -168,7 +181,8 @@ class TourneeDemarrerView(APIView):
         tournee_id = id or pk
         tournee = generics.get_object_or_404(Tournee, id=tournee_id)
 
-        if request.user.role == Role.COLLECTEUR and tournee.collecteur != request.user:
+        if not (request.user.is_superuser or request.user.role == Role.ADMINISTRATEUR or
+                (request.user.role == Role.COLLECTEUR and tournee.collecteur_id == request.user.id)):
             raise PermissionDenied("Vous n'êtes pas le collecteur assigné à cette tournée")
 
         if tournee.statut != StatutTournee.PLANIFIEE:
@@ -194,7 +208,8 @@ class TourneeCollecteOuvrirView(APIView):
         tournee_id = id or pk
         tournee = generics.get_object_or_404(Tournee, id=tournee_id)
 
-        if request.user.role == Role.COLLECTEUR and tournee.collecteur != request.user:
+        if not (request.user.is_superuser or request.user.role == Role.ADMINISTRATEUR or
+                (request.user.role == Role.COLLECTEUR and tournee.collecteur_id == request.user.id)):
             raise PermissionDenied("Vous n'êtes pas le collecteur assigné à cette tournée")
 
         if tournee.statut != StatutTournee.EN_COURS:
@@ -261,7 +276,8 @@ class TourneeCloturerView(APIView):
         tournee_id = id or pk
         tournee = generics.get_object_or_404(Tournee, id=tournee_id)
 
-        if request.user.role == Role.COLLECTEUR and tournee.collecteur != request.user:
+        if not (request.user.is_superuser or request.user.role == Role.ADMINISTRATEUR or
+                (request.user.role == Role.COLLECTEUR and tournee.collecteur_id == request.user.id)):
             raise PermissionDenied("Vous n'êtes pas le collecteur assigné à cette tournée")
 
         if tournee.statut != StatutTournee.EN_COURS:

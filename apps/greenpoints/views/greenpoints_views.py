@@ -2,13 +2,14 @@ import json
 from django.db import transaction
 from django.db.models import Sum
 from rest_framework import generics, status
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.comptes.exceptions import MetierException
 from apps.comptes.models import Role, Utilisateur
-from apps.comptes.permissions import EstAdmin
+from apps.comptes.permissions import EstAdmin, EstCitoyen
 from apps.greenpoints.models import (
     GreenPointsTransaction, StatutTransaction,
     Recompense, Echange
@@ -40,8 +41,13 @@ class GreenPointsSoldeView(APIView):
         user = request.user
         citoyen_id = request.query_params.get('citoyen_id')
 
+        if user.role not in [Role.CITOYEN, Role.ADMINISTRATEUR] and not user.is_superuser:
+            raise PermissionDenied("Cette ressource est réservée aux citoyens et aux administrateurs")
+
         if citoyen_id and (user.role == Role.ADMINISTRATEUR or user.is_superuser):
             citoyen = generics.get_object_or_404(Utilisateur, id=citoyen_id)
+            if citoyen.role != Role.CITOYEN:
+                raise PermissionDenied("Le solde ne peut être consulté que pour un citoyen")
         else:
             citoyen = user
 
@@ -85,11 +91,13 @@ class GreenPointsTransactionListView(generics.ListAPIView):
         user = self.request.user
         if user.role == Role.CITOYEN:
             queryset = GreenPointsTransaction.objects.filter(citoyen=user)
-        else:
+        elif user.role == Role.ADMINISTRATEUR or user.is_superuser:
             queryset = GreenPointsTransaction.objects.all()
             citoyen_id = self.request.query_params.get('citoyen_id')
             if citoyen_id:
                 queryset = queryset.filter(citoyen_id=citoyen_id)
+        else:
+            queryset = GreenPointsTransaction.objects.none()
 
         tournee_id = self.request.query_params.get('tournee_id')
         if tournee_id:
@@ -121,6 +129,8 @@ class RecompenseListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         queryset = Recompense.objects.all().order_by('cout_points')
+        if self.request.user.role != Role.ADMINISTRATEUR and not self.request.user.is_superuser:
+            queryset = queryset.filter(actif=True)
         actif = self.request.query_params.get('actif')
         if actif is not None:
             if actif.lower() in ['true', '1', 't']:
@@ -157,9 +167,14 @@ class RecompenseDetailView(generics.RetrieveUpdateAPIView):
     GET /api/v1/recompenses/{id}/ — Détail d'une récompense
     PATCH /api/v1/recompenses/{id}/ — Modifier une récompense (administrateur)
     """
-    queryset = Recompense.objects.all()
     serializer_class = RecompenseEcritureSerializer
     lookup_field = 'id'
+
+    def get_queryset(self):
+        queryset = Recompense.objects.all()
+        if self.request.user.role != Role.ADMINISTRATEUR and not self.request.user.is_superuser:
+            queryset = queryset.filter(actif=True)
+        return queryset
 
     def get_permissions(self):
         if self.request.method in ['PATCH', 'PUT']:
@@ -209,6 +224,11 @@ class EchangeListCreateView(generics.ListCreateAPIView):
     """
     permission_classes = [IsAuthenticated]
 
+    def get_permissions(self):
+        if self.request.method == 'POST':
+            return [EstCitoyen()]
+        return [IsAuthenticated()]
+
     def get_serializer_class(self):
         if self.request.method == 'POST':
             return EchangeCreationSerializer
@@ -218,15 +238,19 @@ class EchangeListCreateView(generics.ListCreateAPIView):
         user = self.request.user
         if user.role == Role.CITOYEN:
             queryset = Echange.objects.filter(citoyen=user)
-        else:
+        elif user.role == Role.ADMINISTRATEUR or user.is_superuser:
             queryset = Echange.objects.all()
             citoyen_id = self.request.query_params.get('citoyen_id')
             if citoyen_id:
                 queryset = queryset.filter(citoyen_id=citoyen_id)
+        else:
+            queryset = Echange.objects.none()
 
         return queryset.select_related('citoyen', 'recompense').order_by('-date')
 
     def create(self, request, *args, **kwargs):
+        if request.user.role != Role.CITOYEN:
+            raise PermissionDenied("Seuls les citoyens peuvent échanger leurs GreenPoints")
         serializer = EchangeCreationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         recompense_id = serializer.validated_data['recompense_id']

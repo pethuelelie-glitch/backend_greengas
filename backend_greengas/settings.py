@@ -192,6 +192,9 @@ from datetime import timedelta
 # Règle clé du guide : les décimaux sont des nombres JSON, pas des chaînes
 REST_FRAMEWORK = {
     'COERCE_DECIMAL_TO_STRING': False,
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'apps.comptes.authentication.CustomJWTAuthentication',
     ),
