@@ -74,6 +74,48 @@ class ComptesEndpointsTestCase(TestCase):
         self.assertEqual(res.data['utilisateur']['profil_citoyen']['telephone_verifie'], True)
         self.assertEqual(res.data['utilisateur']['role'], "citoyen")
 
+    def test_otp_est_aleatoire_et_limite_les_tentatives(self):
+        telephone = "+2250700000099"
+        user = Utilisateur.objects.create_user(
+            telephone=telephone,
+            nom="Utilisateur OTP",
+            password="Password123!",
+            role=Role.CITOYEN,
+            telephone_verifie=False,
+        )
+        otp = CodeOTP.generer_code(telephone)
+        self.assertRegex(otp.code, r"^[0-9]{6}$")
+        self.assertNotIn(otp.code, str(otp))
+
+        for _ in range(CodeOTP.MAX_TENTATIVES):
+            response = self.client.post(
+                "/api/v1/auth/otp/verifier/",
+                {"telephone": telephone, "code": "000000" if otp.code != "000000" else "999999"},
+                format='json',
+            )
+            self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+        otp.refresh_from_db()
+        self.assertEqual(otp.tentatives, CodeOTP.MAX_TENTATIVES)
+        response = self.client.post(
+            "/api/v1/auth/otp/verifier/",
+            {"telephone": telephone, "code": otp.code},
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        user.refresh_from_db()
+        self.assertFalse(user.telephone_verifie)
+
+        otp_nouveau = CodeOTP.generer_code(telephone)
+        response = self.client.post(
+            "/api/v1/auth/otp/verifier/",
+            {"telephone": telephone, "code": otp_nouveau.code},
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        user.refresh_from_db()
+        self.assertTrue(user.telephone_verifie)
+
     def test_inscription_personnel_validation_et_connexion(self):
         """
         OpenAPI 1.3.0 : Personnel créé en statut_validation='en_attente', AUCUN jeton émis (201 Utilisateur).

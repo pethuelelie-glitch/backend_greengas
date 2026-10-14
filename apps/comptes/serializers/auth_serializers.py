@@ -1,5 +1,7 @@
 import re
 import json
+import secrets
+from django.db.models import F
 from rest_framework import serializers
 from rest_framework.exceptions import AuthenticationFailed
 from django.contrib.auth import authenticate
@@ -254,7 +256,7 @@ class OtpVerificationSerializer(serializers.Serializer):
         telephone = attrs.get('telephone')
         code = attrs.get('code')
 
-        otp = CodeOTP.objects.filter(telephone=telephone, code=code, utilise=False).first()
+        otp = CodeOTP.objects.filter(telephone=telephone, utilise=False).order_by('-cree_le').first()
         if not otp:
             raise MetierException(
                 code="OTP_INVALIDE",
@@ -266,6 +268,25 @@ class OtpVerificationSerializer(serializers.Serializer):
                 code="OTP_EXPIRE",
                 message="Ce code OTP a expiré",
                 details={"code": ["Ce code OTP a expiré."]}
+            )
+
+        if otp.tentatives >= CodeOTP.MAX_TENTATIVES:
+            raise MetierException(
+                code="OTP_INVALIDE",
+                message="Le nombre maximal de tentatives est atteint. Demandez un nouveau code.",
+                details={"code": ["Le nombre maximal de tentatives est atteint."]}
+            )
+
+        if not secrets.compare_digest(otp.code, code):
+            CodeOTP.objects.filter(
+                pk=otp.pk,
+                utilise=False,
+                tentatives__lt=CodeOTP.MAX_TENTATIVES,
+            ).update(tentatives=F('tentatives') + 1)
+            raise MetierException(
+                code="OTP_INVALIDE",
+                message="Code OTP invalide",
+                details={"code": ["Code OTP invalide."]}
             )
 
         attrs['otp'] = otp
