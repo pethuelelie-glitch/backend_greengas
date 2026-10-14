@@ -1,6 +1,10 @@
+import logging
+
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.exceptions import APIException, ValidationError, NotAuthenticated, PermissionDenied, NotFound
+
+logger = logging.getLogger(__name__)
 
 
 class MetierException(APIException):
@@ -105,11 +109,17 @@ def custom_exception_handler(exc, context):
         }
     else:
         # Erreur 500 inattendue
+        request = context.get('request')
+        logger.error(
+            "Unhandled exception in REST API",
+            exc_info=(type(exc), exc, exc.__traceback__),
+            extra={'request_path': getattr(request, 'path', '')},
+        )
         response = Response(
             {
                 "code": "ERREUR_SERVEUR",
                 "message": "Une erreur interne est survenue sur le serveur",
-                "details": {"erreur": str(exc)}
+                "details": {}
             },
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )

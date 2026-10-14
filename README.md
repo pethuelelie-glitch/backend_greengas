@@ -125,6 +125,8 @@ Choisir explicitement `DB_ENGINE=mysql` ou `DB_ENGINE=postgresql` et fournir `DB
 `DB_USER`, `DB_PASSWORD` et `DB_HOST`. Le démarrage refuse les identifiants absents, un moteur
 inconnu, SQLite en production et l'absence d'un cache partagé (`CACHE_URL`, Redis recommandé).
 `psycopg`, `django-redis` et Gunicorn sont inclus dans `requirements.txt`.
+Les journaux sont écrits sur la sortie standard (`LOG_LEVEL=INFO` par défaut en production);
+les erreurs serveur sont journalisées côté serveur et renvoient un message générique à l'API.
 
 Le proxy ou l'hébergeur doit terminer TLS. Définir `TRUST_X_FORWARDED_PROTO=True` uniquement
 si ce proxy supprime l'en-tête client et transmet lui-même `X-Forwarded-Proto: https`; sinon
@@ -149,7 +151,7 @@ Les demandes publiques de comptes personnel restent possibles lorsque la validat
 administrateur est activée. Si elle est désactivée, seule une session administrateur peut créer
 ces comptes. Les données de démonstration activent cette validation par défaut.
 
-### 6. Lancer l'ensemble des tests automatisés (60 tests)
+### 6. Lancer l'ensemble des tests automatisés (61 tests)
 ```bash
 python manage.py test apps.comptes.tests apps.referentiel.tests apps.collecte.tests apps.tri.tests apps.greenpoints.tests apps.energie.tests apps.supervision.tests apps.simulateur.tests
 ```
