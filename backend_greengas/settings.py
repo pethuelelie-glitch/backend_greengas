@@ -180,7 +180,9 @@ JAZZMIN_SETTINGS = {
     "search_model": ["comptes.Utilisateur", "referentiel.Bac"],
     "topmenu_links": [
         {"name": "Accueil", "url": "admin:index", "permissions": ["auth.view_user"]},
+        {"name": "📖 Documentation API (Swagger)", "url": "/api/docs/", "new_window": True},
     ],
+
     "usermenu_links": [
         {"model": "comptes.Utilisateur"},
     ],

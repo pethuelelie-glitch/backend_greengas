@@ -168,3 +168,18 @@ class ComptesEndpointsTestCase(TestCase):
         citoyen.refresh_from_db()
         self.assertEqual(citoyen.statut_validation, StatutValidation.VALIDE)
 
+    def test_documentation_swagger_et_redoc(self):
+        # Les endpoints de documentation sont publics et renvoient 200
+        res_schema = self.client.get("/api/schema/")
+        self.assertEqual(res_schema.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_schema['content-type'], "application/json")
+
+        res_docs = self.client.get("/api/docs/")
+        self.assertEqual(res_docs.status_code, status.HTTP_200_OK)
+        self.assertIn("swagger-ui", str(res_docs.content))
+
+        res_redoc = self.client.get("/api/redoc/")
+        self.assertEqual(res_redoc.status_code, status.HTTP_200_OK)
+        self.assertIn("redoc", str(res_redoc.content))
+
+
