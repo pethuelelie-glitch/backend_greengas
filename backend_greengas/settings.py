@@ -70,13 +70,14 @@ ROOT_URLCONF = 'backend_greengas.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'apps.supervision.context_processors.greengas_stats',
             ],
         },
     },
@@ -130,6 +131,10 @@ USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = 'static/'
+STATICFILES_DIRS = [
+    BASE_DIR / 'static',
+]
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
@@ -174,17 +179,22 @@ CORS_ALLOW_ALL_ORIGINS = DEBUG
 JAZZMIN_SETTINGS = {
     "site_title": "GREENGAS Admin",
     "site_header": "GREENGAS",
-    "site_brand": "GREENGAS 🌿",
+    "site_brand": "GREENGAS",
     "welcome_sign": "Plateforme d'Administration GREENGAS (SIREXE 2026)",
     "copyright": "GREENGAS · Équipe DEDSEC",
-    "search_model": ["comptes.Utilisateur", "referentiel.Bac"],
+    "search_model": ["comptes.Utilisateur", "referentiel.Bac", "collecte.Tournee"],
+    "custom_css": "admin/css/greengas-masterclass.css",
+    "custom_js": "admin/js/greengas-dashboard.js",
     "topmenu_links": [
-        {"name": "Accueil", "url": "admin:index", "permissions": ["auth.view_user"]},
-        {"name": "📖 Documentation API (Swagger)", "url": "/api/docs/", "new_window": True},
+        {"name": "Cockpit", "url": "admin:index", "permissions": ["auth.view_user"]},
+        {"name": "Swagger API", "url": "/api/docs/", "new_window": True},
+        {"name": "ReDoc", "url": "/api/redoc/", "new_window": True},
+        {"name": "Paramètres", "url": "/greengas/supervision/parametre/"},
     ],
 
     "usermenu_links": [
         {"model": "comptes.Utilisateur"},
+        {"name": "Swagger API", "url": "/api/docs/", "new_window": True},
     ],
     "show_sidebar": True,
     "navigation_expanded": True,
@@ -221,6 +231,7 @@ JAZZMIN_SETTINGS = {
     "default_icon_parents": "fas fa-chevron-circle-right",
     "default_icon_children": "fas fa-circle",
     "related_modal_active": True,
+    "actions_sticky_top": True,
     "show_ui_builder": False,
     "changeform_format": "horizontal_tabs",
 }
@@ -230,10 +241,10 @@ JAZZMIN_UI_TWEAKS = {
     "footer_small_text": False,
     "body_small_text": False,
     "brand_small_text": False,
-    "brand_colour": "navbar-success",
+    "brand_colour": "navbar-dark",
     "accent": "accent-success",
-    "navbar": "navbar-success navbar-dark",
-    "no_navbar_border": False,
+    "navbar": "navbar-dark",
+    "no_navbar_border": True,
     "navbar_fixed": True,
     "layout_boxed": False,
     "footer_fixed": False,
@@ -245,8 +256,8 @@ JAZZMIN_UI_TWEAKS = {
     "sidebar_nav_compact_style": False,
     "sidebar_nav_legacy_style": False,
     "sidebar_nav_flat_style": False,
-    "theme": "flatly",
-    "dark_mode_theme": "darkly",
+    "theme": "darkly",
+    "default_theme_mode": "dark",
     "button_classes": {
         "primary": "btn-success",
         "secondary": "btn-secondary",
