@@ -54,6 +54,21 @@ class ComptesEndpointsTestCase(TestCase):
             defaults={"valeur": Decimal('1'), "unite": "", "statut": "aligne"}
         )
 
+    def test_exception_serveur_ne_revele_pas_les_details_internes(self):
+        from types import SimpleNamespace
+        from apps.comptes.exceptions import custom_exception_handler
+
+        secret_interne = "mot-de-passe-db-interne"
+        response = custom_exception_handler(
+            RuntimeError(secret_interne),
+            {'request': SimpleNamespace(path='/api/v1/test/')},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+        self.assertEqual(response.data['code'], 'ERREUR_SERVEUR')
+        self.assertEqual(response.data['details'], {})
+        self.assertNotIn(secret_interne, str(response.data))
+
     def test_inscription_citoyen_directe_et_jetons(self):
         """
         OpenAPI 1.3.0 : Pas de SMS OTP ni de validation référent.
