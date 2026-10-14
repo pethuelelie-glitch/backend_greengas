@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: GREENGAS API
-  version: 1.5.0
+  version: 1.6.0
   description: |
     Contrat d'API commun de GREENGAS (SIREXE Hackathon 2026, équipe DEDSEC).
     Ce fichier fait foi pour le backend Django, l'application Flutter et le Control Center (React / Electron).
@@ -163,6 +163,7 @@ paths:
       operationId: auth_token_rafraichir
       tags: [Auth]
       summary: Obtenir un nouveau jeton d'accès
+      description: Chaque refresh réussi renvoie un nouveau refresh; l'ancien est révoqué et ne peut plus être réutilisé.
       security: []
       requestBody:
         required: true
@@ -180,10 +181,31 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [access]
+                required: [access, refresh]
                 properties:
                   access: { type: string }
+                  refresh: { type: string }
         '401': { $ref: '#/components/responses/NonAuthentifie' }
+        '403': { $ref: '#/components/responses/AccesRefuse' }
+  /auth/deconnexion/:
+    post:
+      operationId: auth_deconnexion
+      tags: [Auth]
+      summary: Révoquer le jeton de renouvellement
+      description: Requiert le jeton d'accès de son propriétaire et invalide le refresh indiqué.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh]
+              properties:
+                refresh: { type: string }
+      responses:
+        '204': { description: Jeton révoqué }
+        '401': { $ref: '#/components/responses/NonAuthentifie' }
+        '403': { $ref: '#/components/responses/AccesRefuse' }
   /auth/moi/:
     get:
       operationId: auth_moi

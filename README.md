@@ -131,11 +131,16 @@ la redirection HTTPS ne peut pas reconnaître la connexion TLS terminée en amon
 configurable avec `SECURE_HSTS_SECONDS`; l'inclusion des sous-domaines et le préchargement
 sont désactivés jusqu'à validation de tous les domaines concernés.
 
+Les jetons d'accès expirent après 15 minutes; les refresh expirent après 7 jours, sont renouvelés
+à chaque usage et révoqués à la rotation ou via `POST /api/v1/auth/deconnexion/`. Appliquer les
+migrations avant de démarrer (`python manage.py migrate`) et planifier quotidiennement
+`python manage.py flushexpiredtokens` pour purger les refresh expirés.
+
 Les demandes publiques de comptes personnel restent possibles lorsque la validation
 administrateur est activée. Si elle est désactivée, seule une session administrateur peut créer
 ces comptes. Les données de démonstration activent cette validation par défaut.
 
-### 6. Lancer l'ensemble des tests automatisés (58 tests)
+### 6. Lancer l'ensemble des tests automatisés (59 tests)
 ```bash
 python manage.py test apps.comptes.tests apps.referentiel.tests apps.collecte.tests apps.tri.tests apps.greenpoints.tests apps.energie.tests apps.supervision.tests apps.simulateur.tests
 ```

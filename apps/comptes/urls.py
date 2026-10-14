@@ -7,6 +7,7 @@ from apps.comptes.views import (
     OtpVerifierView,
     OtpRenvoyerView,
     CustomTokenRefreshView,
+    TokenRevokeView,
     UtilisateurListCreateView,
     UtilisateurDetailView,
     UtilisateurValidationView,
@@ -16,6 +17,7 @@ urlpatterns = [
     # Authentification (/api/v1/auth/...)
     path('auth/token/', ConnexionView.as_view(), name='auth_token'),
     path('auth/token/rafraichir/', CustomTokenRefreshView.as_view(), name='auth_token_rafraichir'),
+    path('auth/deconnexion/', TokenRevokeView.as_view(), name='auth_deconnexion'),
     path('auth/moi/', MoiView.as_view(), name='auth_moi'),
     path('auth/inscription/', InscriptionCitoyenView.as_view(), name='auth_inscription'),
     path('auth/inscription/personnel/', InscriptionPersonnelView.as_view(), name='auth_inscription_personnel'),
