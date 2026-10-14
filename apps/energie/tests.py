@@ -211,6 +211,52 @@ class EnergieEndpointsTestCase(TestCase):
         self.site.refresh_from_db()
         self.assertEqual(self.site.statut, 'alerte')
 
+    def test_alerte_ch4_seule_et_mise_a_jour_occurrence(self):
+        self.client.force_authenticate(user=self.capteur_user)
+        payload = {
+            'date': '2026-09-12',
+            'biogaz_mesure_m3': 32.0,
+            'ch4_pct': 49.0,
+            'source': 'capteur',
+        }
+        response = self.client.post(
+            f'/api/v1/sites/{self.site.id}/mesures/', payload, format='json'
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(Decimal(str(response.data['ecart_pct'])), Decimal('0.0'))
+        self.assertEqual(
+            Alerte.objects.filter(site=self.site, type=TypeAlerte.COMPOSITION).count(), 1
+        )
+        self.assertEqual(
+            Alerte.objects.filter(site=self.site, type=TypeAlerte.PRODUCTION).count(), 0
+        )
+
+        payload['ch4_pct'] = 48.0
+        self.client.post(f'/api/v1/sites/{self.site.id}/mesures/', payload, format='json')
+        alerte = Alerte.objects.get(site=self.site, type=TypeAlerte.COMPOSITION)
+        self.assertEqual(alerte.nb_occurrences, 2)
+        self.assertEqual(alerte.valeur_mesuree, Decimal('48.00'))
+
+    def test_seuils_alerte_inclusif_a_20_pourcent_et_ch4_50(self):
+        self.client.force_authenticate(user=self.capteur_user)
+        payload = {
+            'date': '2026-09-12',
+            'biogaz_mesure_m3': 38.4,  # exactement +20 % de 32 m³
+            'ch4_pct': 50.0,          # le seuil lui-même ne déclenche pas l'alerte CH4
+            'source': 'capteur',
+        }
+        response = self.client.post(
+            f'/api/v1/sites/{self.site.id}/mesures/', payload, format='json'
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(Decimal(str(response.data['ecart_pct'])), Decimal('20.0'))
+        self.assertEqual(
+            Alerte.objects.filter(site=self.site, type=TypeAlerte.PRODUCTION).count(), 1
+        )
+        self.assertEqual(
+            Alerte.objects.filter(site=self.site, type=TypeAlerte.COMPOSITION).count(), 0
+        )
+
     def test_alertes_list_and_resoudre(self):
         alerte = Alerte.objects.create(
             site=self.site,

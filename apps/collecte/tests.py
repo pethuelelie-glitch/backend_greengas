@@ -12,6 +12,8 @@ from apps.collecte.models import (
     Tournee, StatutTournee, MotifAffectation,
     Collecte, StatutCollecte, StatutControle, SourceMesure
 )
+from apps.greenpoints.models import GreenPointsTransaction, StatutTransaction
+from apps.supervision.models import JournalAudit
 
 
 class CollecteEndpointsTestCase(TestCase):
@@ -196,3 +198,73 @@ class CollecteEndpointsTestCase(TestCase):
         res_close = self.client.post(f"/api/v1/tournees/{tournee_id}/cloturer/")
         self.assertEqual(res_close.status_code, status.HTTP_200_OK)
         self.assertEqual(res_close.data['statut'], "collectee")
+
+    def test_collecte_suspecte_et_decision_admin(self):
+        collecte = Collecte.objects.create(
+            tournee=Tournee.objects.create(
+                code="TRN-TEST-01", date=date.today(), secteur=self.secteur,
+                site=self.site_nominal, collecteur=self.collecteur,
+                statut=StatutTournee.EN_COURS,
+            ),
+            bac=self.bac,
+            collecteur=self.collecteur,
+            statut=StatutCollecte.PESEE,
+            tare_kg=Decimal('10.00'),
+            poids_brut_kg=Decimal('10.29'),
+            poids_net_kg=Decimal('0.29'),
+        )
+        Scan.objects.create(
+            citoyen=self.citoyen_valide, bac=self.bac,
+            statut=StatutScan.VALIDE, compte=True,
+        )
+        self.client.force_authenticate(user=self.collecteur)
+        response = self.client.post(f"/api/v1/collectes/{collecte.id}/valider/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(Decimal(str(response.data['kg_par_scan'])), Decimal('0.290'))
+        self.assertEqual(response.data['statut_controle'], StatutControle.A_VERIFIER)
+
+        transaction_points = GreenPointsTransaction.objects.create(
+            citoyen=self.citoyen_valide, bac=self.bac, tournee=collecte.tournee,
+            collecte=collecte, scans_citoyen=1, scans_bac=1,
+            poids_attribue_kg=Decimal('0.29'), valeur_kg=Decimal('10'),
+            coef_qualite=Decimal('1'), points=2,
+            statut=StatutTransaction.EN_ATTENTE,
+        )
+        self.client.force_authenticate(user=self.admin)
+        decision = self.client.post(
+            f"/api/v1/collectes/{collecte.id}/decision/",
+            {"decision": "valider_points", "motif": "Pesée vérifiée"}, format='json',
+        )
+        self.assertEqual(decision.status_code, status.HTTP_200_OK)
+        transaction_points.refresh_from_db()
+        self.assertEqual(transaction_points.statut, StatutTransaction.CREDITEE)
+        self.assertTrue(JournalAudit.objects.filter(action="collecte.valider_points").exists())
+
+        collecte_annulee = Collecte.objects.create(
+            tournee=Tournee.objects.create(
+                code="TRN-TEST-02", date=date.today(), secteur=self.secteur,
+                site=self.site_nominal, collecteur=self.collecteur,
+                statut=StatutTournee.EN_COURS,
+            ),
+            bac=self.bac,
+            collecteur=self.collecteur,
+            statut=StatutCollecte.VALIDEE,
+            statut_controle=StatutControle.A_VERIFIER,
+            tare_kg=Decimal('10.00'),
+            poids_brut_kg=Decimal('10.29'),
+            poids_net_kg=Decimal('0.29'),
+        )
+        tx_annulee = GreenPointsTransaction.objects.create(
+            citoyen=self.citoyen_valide, bac=self.bac, tournee=collecte_annulee.tournee,
+            collecte=collecte_annulee, scans_citoyen=1, scans_bac=1,
+            poids_attribue_kg=Decimal('0.29'), valeur_kg=Decimal('10'),
+            coef_qualite=Decimal('1'), points=2,
+            statut=StatutTransaction.EN_ATTENTE,
+        )
+        decision_annulation = self.client.post(
+            f"/api/v1/collectes/{collecte_annulee.id}/decision/",
+            {"decision": "annuler_points"}, format='json',
+        )
+        self.assertEqual(decision_annulation.status_code, status.HTTP_200_OK)
+        tx_annulee.refresh_from_db()
+        self.assertEqual(tx_annulee.statut, StatutTransaction.ANNULEE)

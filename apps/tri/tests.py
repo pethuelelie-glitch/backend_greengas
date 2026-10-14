@@ -250,6 +250,62 @@ class TriEndpointsTestCase(TestCase):
         self.assertEqual(get_response.data['code_tournee'], "TRN-1013-01")
         self.assertEqual(get_response.data['nb_transactions'], 2)
 
+    def test_tri_met_les_points_en_attente_si_collecte_suspecte(self):
+        self.client.force_authenticate(user=self.operateur)
+        self.collecte.statut_controle = StatutControle.A_VERIFIER
+        self.collecte.save(update_fields=['statut_controle'])
+        response = self.client.post(
+            f"/api/v1/tournees/{self.tournee.id}/tri/",
+            {
+                "niveau_contamination": "moyen",
+                "lots": [{"categorie": "organique", "poids_kg": 100}],
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['points_credites'], 0)
+        self.assertEqual(response.data['points_en_attente'], 800)
+        self.assertEqual(
+            set(GreenPointsTransaction.objects.filter(tournee=self.tournee).values_list('statut', flat=True)),
+            {StatutTransaction.EN_ATTENTE},
+        )
+
+    def test_coefficient_de_toutes_les_filieres_et_tolerance_exacte(self):
+        self.client.force_authenticate(user=self.operateur)
+        # 102 kg sur 100 kg collectés donne exactement 2 % d'écart, autorisé sans motif.
+        categories = [
+            "organique", "metal", "plastique", "biomasse",
+            "carton_papier", "verre", "refus",
+        ]
+        lots = [
+            {"categorie": categorie, "poids_kg": 40.8 if categorie == "refus" else 10.2}
+            for categorie in categories
+        ]
+        response = self.client.post(
+            f"/api/v1/tournees/{self.tournee.id}/tri/",
+            {"niveau_contamination": "moyen", "lots": lots},
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(float(response.data['ecart_pct']), 2.0)
+        # Valeur/kg = 10% * (10 + 15 + 8 + 6 + 5 + 3 + 0) = 4.7.
+        # Qualité moyenne = 0.8; 100 kg donnent 376 points.
+        self.assertEqual(float(response.data['valeur_kg']), 4.7)
+        self.assertEqual(float(response.data['coef_qualite']), 0.8)
+        self.assertEqual(response.data['points_credites'], 376)
+        self.assertEqual(
+            dict(LotTrie.objects.filter(tournee=self.tournee).values_list('categorie', 'destination')),
+            {
+                "organique": Destination.DIGESTEUR,
+                "metal": Destination.RECYCLEUR,
+                "plastique": Destination.RECYCLEUR,
+                "biomasse": Destination.UNITE_BIOMASSE,
+                "carton_papier": Destination.RECYCLEUR,
+                "verre": Destination.RECYCLEUR,
+                "refus": Destination.ENFOUISSEMENT,
+            },
+        )
+
     def test_lister_lots_avec_filtres(self):
         self.client.force_authenticate(user=self.admin)
         # Créer des lots

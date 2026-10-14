@@ -194,3 +194,16 @@ class GreenPointsEndpointsTestCase(TestCase):
         res_fail = self.client.post("/api/v1/echanges/", payload, format='json')
         self.assertEqual(res_fail.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
         self.assertEqual(res_fail.data['code'], "SOLDE_INSUFFISANT")
+
+    def test_echange_recompense_inactive_refuse(self):
+        self.recompense.actif = False
+        self.recompense.save(update_fields=['actif'])
+        self.client.force_authenticate(user=self.citoyen)
+        response = self.client.post(
+            "/api/v1/echanges/",
+            {"recompense_id": str(self.recompense.id)},
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertEqual(response.data['code'], "RECOMPENSE_INACTIVE")
+        self.assertEqual(Echange.objects.count(), 0)
