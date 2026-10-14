@@ -7,7 +7,7 @@ def is_validation_personnel_active() -> bool:
     Contrat 1.5.0 :
     - 1 = validation activée (statut_validation = en_attente, notification émise, 403 à la connexion)
     - 0 = désactivée (statut_validation = valide, pas de notification, connexion autorisée)
-    Valeur par défaut : 0 (désactivée).
+    Valeur par défaut : True (validation activée, comportement fermé en cas d'erreur).
     """
     try:
         from apps.supervision.models import Parametre
@@ -16,4 +16,4 @@ def is_validation_personnel_active() -> bool:
             return Decimal(str(param.valeur)) == Decimal('1')
     except Exception:
         pass
-    return False
+    return True

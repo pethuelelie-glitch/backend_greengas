@@ -3,6 +3,7 @@ import json
 from rest_framework import serializers
 from rest_framework.exceptions import AuthenticationFailed
 from django.contrib.auth import authenticate
+from django.db import transaction
 from apps.comptes.models import Utilisateur, Role, StatutValidation, CodeOTP
 from apps.comptes.exceptions import (
     ConflitException,
@@ -204,6 +205,7 @@ class InscriptionPersonnelSerializer(serializers.Serializer):
             raise serializers.ValidationError("Le rôle doit être 'operateur_tri' ou 'responsable_methanisation'.")
         return value
 
+    @transaction.atomic
     def create(self, validated_data):
         from apps.comptes.utils import is_validation_personnel_active
 
@@ -221,26 +223,25 @@ class InscriptionPersonnelSerializer(serializers.Serializer):
             telephone_verifie=True
         )
 
-        # Journaliser la demande dans JournalAudit si en attente
-        if statut_val == StatutValidation.EN_ATTENTE:
-            try:
-                from apps.supervision.models import JournalAudit, TypeObjet
-                JournalAudit.objects.create(
-                    auteur=utilisateur,
-                    action="utilisateur.demande_inscription",
-                    objet_type=TypeObjet.UTILISATEUR,
-                    objet_id=str(utilisateur.id),
-                    nouvelle_valeur=json.dumps({
-                        "nom": utilisateur.nom,
-                        "telephone": utilisateur.telephone,
-                        "email": utilisateur.email,
-                        "role": utilisateur.role,
-                        "statut_validation": "en_attente"
-                    }),
-                    motif="Demande d'inscription personnel en attente de validation admin"
-                )
-            except Exception:
-                pass
+        from apps.supervision.models import JournalAudit, TypeObjet
+        en_attente = statut_val == StatutValidation.EN_ATTENTE
+        JournalAudit.objects.create(
+            auteur=utilisateur,
+            action="utilisateur.demande_inscription" if en_attente else "utilisateur.inscrire",
+            objet_type=TypeObjet.UTILISATEUR,
+            objet_id=str(utilisateur.id),
+            nouvelle_valeur=json.dumps({
+                "nom": utilisateur.nom,
+                "telephone": utilisateur.telephone,
+                "email": utilisateur.email,
+                "role": utilisateur.role,
+                "statut_validation": statut_val
+            }),
+            motif=(
+                "Demande d'inscription personnel en attente de validation admin"
+                if en_attente else "Inscription personnel"
+            )
+        )
 
         return utilisateur
 

@@ -444,7 +444,7 @@
   "parametres": [
     {
       "cle": "validation_comptes_personnel",
-      "valeur": 0,
+      "valeur": 1,
       "unite": "",
       "statut": "aligne",
       "description": "Validation des comptes du personnel par un administrateur (1 = activée, 0 = désactivée)",

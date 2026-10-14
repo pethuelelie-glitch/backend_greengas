@@ -1,4 +1,5 @@
 from decimal import Decimal
+from unittest.mock import patch
 from django.test import TestCase
 from rest_framework.test import APIClient
 from rest_framework import status
@@ -91,6 +92,11 @@ class ComptesEndpointsTestCase(TestCase):
         self.assertNotIn('access', res_inscr.data)
         self.assertEqual(res_inscr.data['statut_validation'], "en_attente")
         self.assertEqual(res_inscr.data['email'], "yao.tri@greengas.ci")
+        from apps.supervision.models import JournalAudit
+        self.assertTrue(JournalAudit.objects.filter(
+            action="utilisateur.demande_inscription",
+            objet_id=res_inscr.data['id'],
+        ).exists())
         personnel_id = res_inscr.data['id']
 
         # Tentative de connexion avant validation -> 403 COMPTE_NON_VALIDE
@@ -449,7 +455,7 @@ class Contrat150TestCase(TestCase):
     def test_inscription_personnel_selon_parametre(self):
         """
         POST /auth/inscription/personnel/ (toujours sans jetons) :
-        - paramètre à 0 -> statut_validation = valide, sans notification
+        - paramètre à 0 -> inscription publique refusée, inscription admin autorisée
         - paramètre à 1 -> statut_validation = en_attente, notification compte_a_valider aux admins
         """
         from apps.supervision.models import Notification, TypeNotification
@@ -465,6 +471,11 @@ class Contrat150TestCase(TestCase):
             "mot_de_passe": "password123",
             "role": "operateur_tri"
         }
+        res_public = self.client.post("/api/v1/auth/inscription/personnel/", payload1, format='json')
+        self.assertEqual(res_public.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertFalse(Utilisateur.objects.filter(telephone=payload1['telephone']).exists())
+
+        self.client.force_authenticate(user=self.admin)
         res1 = self.client.post("/api/v1/auth/inscription/personnel/", payload1, format='json')
         self.assertEqual(res1.status_code, status.HTTP_201_CREATED)
         self.assertEqual(res1.data['statut_validation'], "valide")
@@ -475,6 +486,7 @@ class Contrat150TestCase(TestCase):
         # 2. Paramètre à 1 : validation activée
         self.param.valeur = Decimal('1')
         self.param.save()
+        self.client.force_authenticate(user=None)
 
         payload2 = {
             "telephone": "+2250788000002",
@@ -489,6 +501,28 @@ class Contrat150TestCase(TestCase):
         self.assertNotIn("access", res2.data)
         # Notification compte_a_valider émise pour les admins
         self.assertTrue(Notification.objects.filter(type=TypeNotification.COMPTE_A_VALIDER, objet_id=res2.data['id']).exists())
+
+    def test_inscription_personnel_est_annulee_si_audit_echoue(self):
+        from apps.comptes.serializers import InscriptionPersonnelSerializer
+        from apps.supervision.models import JournalAudit
+
+        self.param.valeur = Decimal('1')
+        self.param.save()
+        payload = {
+            "telephone": "+2250788000099",
+            "email": "sans.audit@greengas.ci",
+            "nom": "Personnel sans audit",
+            "mot_de_passe": "password123",
+            "role": Role.OPERATEUR_TRI,
+        }
+        serializer = InscriptionPersonnelSerializer(data=payload)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+        with patch.object(JournalAudit.objects, 'create', side_effect=RuntimeError("audit indisponible")):
+            with self.assertRaises(RuntimeError):
+                serializer.save()
+
+        self.assertFalse(Utilisateur.objects.filter(telephone=payload['telephone']).exists())
 
     def test_connexion_et_deconnexion_dynamique_requetes_authentifiees(self):
         """

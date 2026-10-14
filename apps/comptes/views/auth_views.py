@@ -6,6 +6,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from apps.comptes.models import Utilisateur, CodeOTP, Role, StatutValidation
+from apps.comptes.permissions import EstAdmin
 from apps.comptes.serializers import (
     UtilisateurSerializer,
     ConnexionSerializer,
@@ -107,7 +108,13 @@ class InscriptionPersonnelView(APIView):
     Le compte est créé avec statut_validation = en_attente et AUCUN jeton n'est émis.
     Renvoie 201 avec le profil Utilisateur en attente de validation admin.
     """
-    permission_classes = [AllowAny]
+    def get_permissions(self):
+        # Les candidatures publiques ne sont permises que si elles seront soumises
+        # à validation. Sans validation, seul un administrateur peut créer le compte.
+        from apps.comptes.utils import is_validation_personnel_active
+        if is_validation_personnel_active():
+            return [AllowAny()]
+        return [IsAuthenticated(), EstAdmin()]
 
     def post(self, request):
         from apps.comptes.serializers import InscriptionPersonnelSerializer

@@ -31,12 +31,18 @@ if not SECRET_KEY:
         "ERREUR CRITIQUE DE SÉCURITÉ : La variable 'SECRET_KEY' est manquante ou vide dans votre fichier .env !"
     )
 
-# Mode de débogage (lu depuis .env)
-DEBUG = os.environ.get('DEBUG', 'True').lower() in ('true', '1', 'yes', 't')
+# Mode de débogage : désactivé par défaut, activé explicitement en développement.
+def env_bool(name, default=False):
+    return os.environ.get(name, str(default)).lower() in ('true', '1', 'yes', 't', 'on')
 
-# Hôtes autorisés (lu depuis .env)
-_hosts = os.environ.get('ALLOWED_HOSTS', '*')
-ALLOWED_HOSTS = ['*'] if _hosts == '*' else [h.strip() for h in _hosts.split(',') if h.strip()]
+
+DEBUG = env_bool('DEBUG', False)
+
+# Hôtes autorisés (une liste explicite est requise en production).
+_hosts = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1,testserver')
+ALLOWED_HOSTS = [host.strip() for host in _hosts.split(',') if host.strip()]
+if not DEBUG and '*' in ALLOWED_HOSTS:
+    raise ValueError("ALLOWED_HOSTS ne peut pas contenir '*' lorsque DEBUG est désactivé.")
 
 
 # Application definition
@@ -205,12 +211,28 @@ SIMPLE_JWT = {
     'USER_ID_CLAIM': 'user_id',
 }
 
-# Configuration CORS pour le Control Center React / Vite
+# Configuration de sécurité HTTP et des origines du Control Center.
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://localhost:3000",
+    origin.strip()
+    for origin in os.environ.get(
+        'CORS_ALLOWED_ORIGINS',
+        'http://localhost:5173,http://localhost:3000' if DEBUG else '',
+    ).split(',')
+    if origin.strip()
 ]
-CORS_ALLOW_ALL_ORIGINS = DEBUG
+CORS_ALLOW_ALL_ORIGINS = False
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get('CSRF_TRUSTED_ORIGINS', '').split(',')
+    if origin.strip()
+]
+
+SECURE_SSL_REDIRECT = env_bool('SECURE_SSL_REDIRECT', not DEBUG)
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+SECURE_HSTS_SECONDS = int(os.environ.get('SECURE_HSTS_SECONDS', '31536000' if not DEBUG else '0'))
+SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
+SECURE_HSTS_PRELOAD = not DEBUG
 
 
 # ==============================================================================
