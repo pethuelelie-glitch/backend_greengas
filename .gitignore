@@ -14,9 +14,7 @@ local_settings.py
 db.sqlite3
 db.sqlite3-journal
 
-# If you use a build or CI process to run 'collectstatic', 
-# you should uncomment the next line to ignore your static root folder:
-# staticfiles/
+staticfiles/
 
 # Core user-uploaded media directory
 media/

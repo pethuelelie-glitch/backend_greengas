@@ -125,6 +125,9 @@ Choisir explicitement `DB_ENGINE=mysql` ou `DB_ENGINE=postgresql` et fournir `DB
 `DB_USER`, `DB_PASSWORD` et `DB_HOST`. Le démarrage refuse les identifiants absents, un moteur
 inconnu, SQLite en production et l'absence d'un cache partagé (`CACHE_URL`, Redis recommandé).
 `psycopg`, `django-redis` et Gunicorn sont inclus dans `requirements.txt`.
+WhiteNoise sert les fichiers statiques collectés. Avant le démarrage, exécuter
+`python manage.py collectstatic --noinput`, appliquer les migrations, puis lancer
+`gunicorn backend_greengas.wsgi:application --bind 0.0.0.0:8000 --workers 3` derrière le proxy TLS.
 Les journaux sont écrits sur la sortie standard (`LOG_LEVEL=INFO` par défaut en production);
 les erreurs serveur sont journalisées côté serveur et renvoient un message générique à l'API.
 
@@ -155,6 +158,9 @@ ces comptes. Les données de démonstration activent cette validation par défau
 ```bash
 python manage.py test apps.comptes.tests apps.referentiel.tests apps.collecte.tests apps.tri.tests apps.greenpoints.tests apps.energie.tests apps.supervision.tests apps.simulateur.tests
 ```
+
+GitHub Actions exécute aussi cette suite sur MySQL 8.4 avec Redis et vérifie les réglages
+de déploiement ainsi que la collecte des fichiers statiques à chaque push ou pull request vers `main`.
 
 ### 7. Lancer le serveur de développement
 ```bash

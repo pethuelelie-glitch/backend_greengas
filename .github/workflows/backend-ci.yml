@@ -1,0 +1,88 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: ci-root-password
+          MYSQL_DATABASE: greengas
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --host=127.0.0.1 --password=ci-root-password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      SECRET_KEY: ci-only-not-a-production-secret
+      DEBUG: "True"
+      ALLOWED_HOSTS: localhost,127.0.0.1,testserver
+      DB_ENGINE: mysql
+      DB_NAME: greengas
+      DB_USER: root
+      DB_PASSWORD: ci-root-password
+      DB_HOST: 127.0.0.1
+      DB_PORT: "3306"
+      CACHE_URL: redis://127.0.0.1:6379/1
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Check migration state
+        run: python manage.py makemigrations --check --dry-run
+
+      - name: Run application tests against MySQL
+        run: >-
+          python manage.py test
+          apps.comptes.tests apps.referentiel.tests apps.collecte.tests
+          apps.tri.tests apps.greenpoints.tests apps.energie.tests
+          apps.supervision.tests apps.simulateur.tests
+
+      - name: Check production settings
+        env:
+          DEBUG: "False"
+          SECURE_SSL_REDIRECT: "True"
+          TRUST_X_FORWARDED_PROTO: "True"
+        run: python manage.py check --deploy
+
+      - name: Collect static assets
+        env:
+          DEBUG: "False"
+          SECURE_SSL_REDIRECT: "True"
+          TRUST_X_FORWARDED_PROTO: "True"
+        run: python manage.py collectstatic --noinput
