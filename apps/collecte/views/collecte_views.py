@@ -32,10 +32,14 @@ class CollecteListView(generics.ListAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        if user.role == Role.COLLECTEUR:
-            queryset = Collecte.objects.filter(collecteur=user)
-        else:
+        if user.role == Role.ADMINISTRATEUR or user.is_superuser:
             queryset = Collecte.objects.all()
+        elif user.role == Role.COLLECTEUR:
+            queryset = Collecte.objects.filter(collecteur=user)
+        elif user.role == Role.REFERENT and user.bac_id:
+            queryset = Collecte.objects.filter(bac_id=user.bac_id)
+        else:
+            queryset = Collecte.objects.none()
 
         tournee_id = self.request.query_params.get('tournee_id') or self.request.query_params.get('tournee')
         if tournee_id:
@@ -60,10 +64,19 @@ class CollecteDetailView(generics.RetrieveAPIView):
     """
     GET /api/v1/collectes/{id}/ — Détail d'une collecte.
     """
-    queryset = Collecte.objects.all()
     serializer_class = CollecteSerializer
     permission_classes = [IsAuthenticated]
     lookup_field = 'id'
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.role == Role.ADMINISTRATEUR or user.is_superuser:
+            return Collecte.objects.all()
+        if user.role == Role.COLLECTEUR:
+            return Collecte.objects.filter(collecteur=user)
+        if user.role == Role.REFERENT and user.bac_id:
+            return Collecte.objects.filter(bac_id=user.bac_id)
+        return Collecte.objects.none()
 
 
 class CollectePeseeView(APIView):
@@ -77,6 +90,8 @@ class CollectePeseeView(APIView):
     def post(self, request, id=None, pk=None):
         collecte_id = id or pk
         collecte = generics.get_object_or_404(Collecte, id=collecte_id)
+        if request.user.role not in [Role.ADMINISTRATEUR, Role.CAPTEUR] and not request.user.is_superuser:
+            raise PermissionDenied("Seuls un administrateur ou un capteur peuvent enregistrer une pesée")
 
         if collecte.statut != StatutCollecte.EN_ATTENTE_PESEE:
             raise MetierException(
@@ -115,7 +130,8 @@ class CollecteValiderView(APIView):
         collecte_id = id or pk
         collecte = generics.get_object_or_404(Collecte, id=collecte_id)
 
-        if request.user.role == Role.COLLECTEUR and collecte.collecteur != request.user:
+        if not (request.user.is_superuser or request.user.role == Role.ADMINISTRATEUR or
+                (request.user.role == Role.COLLECTEUR and collecte.collecteur_id == request.user.id)):
             raise PermissionDenied("Vous n'êtes pas le collecteur assigné à cette collecte")
 
         if collecte.statut != StatutCollecte.PESEE:
@@ -192,6 +208,9 @@ class CollecteDecisionView(APIView):
     def post(self, request, id=None, pk=None):
         collecte_id = id or pk
         collecte = generics.get_object_or_404(Collecte, id=collecte_id)
+
+        if request.user.role == Role.REFERENT and collecte.bac_id != request.user.bac_id:
+            raise PermissionDenied("Cette collecte ne concerne pas votre bac")
 
         if collecte.statut_controle != StatutControle.A_VERIFIER:
             raise MetierException(

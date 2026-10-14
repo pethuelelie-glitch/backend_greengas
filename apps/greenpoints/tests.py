@@ -152,6 +152,24 @@ class GreenPointsEndpointsTestCase(TestCase):
         self.assertEqual(res_creditee.data['count'], 1)
         self.assertEqual(res_creditee.data['results'][0]['points'], 300)
 
+        # Un autre rôle ne doit pas pouvoir parcourir l'historique des citoyens.
+        self.client.force_authenticate(user=self.collecteur)
+        res_collecteur = self.client.get("/api/v1/greenpoints/transactions/")
+        self.assertEqual(res_collecteur.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_collecteur.data['count'], 0)
+
+    def test_endpoints_solde_et_echange_refusent_les_roles_non_citoyens(self):
+        self.client.force_authenticate(user=self.collecteur)
+        res_solde = self.client.get("/api/v1/greenpoints/solde/")
+        self.assertEqual(res_solde.status_code, status.HTTP_403_FORBIDDEN)
+
+        res_echange = self.client.post(
+            "/api/v1/echanges/",
+            {"recompense_id": str(self.recompense.id)},
+            format='json',
+        )
+        self.assertEqual(res_echange.status_code, status.HTTP_403_FORBIDDEN)
+
     def test_recompenses_gestion_admin(self):
         self.client.force_authenticate(user=self.admin)
         # Créer une récompense
