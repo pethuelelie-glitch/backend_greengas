@@ -179,7 +179,7 @@ class ComptesEndpointsTestCase(TestCase):
         # Vérification OpenAPI 1.5.0
         res_schema = self.client.get("/api/schema/")
         self.assertEqual(res_schema.status_code, status.HTTP_200_OK)
-        self.assertEqual(res_schema.json()['info']['version'], "1.5.0")
+        self.assertEqual(res_schema.json()['info']['version'], "1.6.0")
 
         res_docs = self.client.get("/api/docs/")
         self.assertEqual(res_docs.status_code, status.HTTP_200_OK)
@@ -377,6 +377,58 @@ class ComptesEndpointsTestCase(TestCase):
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(res.data['code'], "COMPTE_NON_VALIDE")
         self.assertEqual(res.data['details'].get('actif'), False)
+
+    def test_rotation_revoque_ancien_refresh_et_deconnexion_revoque_le_nouveau(self):
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        user = Utilisateur.objects.create_user(
+            telephone="+2250766778800",
+            nom="Utilisateur Jeton",
+            password="greengas2026",
+            role=Role.CITOYEN,
+            statut_validation=StatutValidation.VALIDE,
+        )
+        refresh_initial = str(RefreshToken.for_user(user))
+
+        res_rotation = self.client.post(
+            "/api/v1/auth/token/rafraichir/",
+            {"refresh": refresh_initial},
+            format='json',
+        )
+        self.assertEqual(res_rotation.status_code, status.HTTP_200_OK)
+        self.assertIn('access', res_rotation.data)
+        self.assertIn('refresh', res_rotation.data)
+
+        res_rejeu = self.client.post(
+            "/api/v1/auth/token/rafraichir/",
+            {"refresh": refresh_initial},
+            format='json',
+        )
+        self.assertEqual(res_rejeu.status_code, status.HTTP_401_UNAUTHORIZED)
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {res_rotation.data['access']}")
+        res_deconnexion = self.client.post(
+            "/api/v1/auth/deconnexion/",
+            {"refresh": res_rotation.data['refresh']},
+            format='json',
+        )
+        self.assertEqual(res_deconnexion.status_code, status.HTTP_204_NO_CONTENT)
+
+        res_refresh_revoque = self.client.post(
+            "/api/v1/auth/token/rafraichir/",
+            {"refresh": res_rotation.data['refresh']},
+            format='json',
+        )
+        self.assertEqual(res_refresh_revoque.status_code, status.HTTP_401_UNAUTHORIZED)
+
+        token_orphelin = str(RefreshToken.for_user(user))
+        user.delete()
+        res_compte_supprime = self.client.post(
+            "/api/v1/auth/token/rafraichir/",
+            {"refresh": token_orphelin},
+            format='json',
+        )
+        self.assertEqual(res_compte_supprime.status_code, status.HTTP_401_UNAUTHORIZED)
 
 
 class Contrat150TestCase(TestCase):

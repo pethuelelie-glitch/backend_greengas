@@ -6,6 +6,7 @@ from .auth_views import (
     OtpVerifierView,
     OtpRenvoyerView,
     CustomTokenRefreshView,
+    TokenRevokeView,
 )
 from .utilisateur_views import (
     UtilisateurListCreateView,
@@ -21,6 +22,7 @@ __all__ = [
     'OtpVerifierView',
     'OtpRenvoyerView',
     'CustomTokenRefreshView',
+    'TokenRevokeView',
     'UtilisateurListCreateView',
     'UtilisateurDetailView',
     'UtilisateurValidationView',

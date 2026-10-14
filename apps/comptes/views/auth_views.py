@@ -216,3 +216,18 @@ class CustomTokenRefreshView(APIView):
         serializer = CustomTokenRefreshSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         return Response(serializer.validated_data, status=status.HTTP_200_OK)
+
+
+class TokenRevokeView(APIView):
+    """Révoque le refresh token de l'utilisateur connecté."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from apps.comptes.serializers import TokenRevokeSerializer
+
+        serializer = TokenRevokeSerializer(
+            data=request.data,
+            context={'request': request},
+        )
+        serializer.is_valid(raise_exception=True)
+        return Response(status=status.HTTP_204_NO_CONTENT)

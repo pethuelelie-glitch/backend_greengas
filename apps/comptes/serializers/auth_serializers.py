@@ -292,29 +292,58 @@ class CustomTokenRefreshSerializer(serializers.Serializer):
         user_id = refresh.payload.get('user_id')
         user = Utilisateur.objects.filter(id=user_id).first()
 
-        if user:
-            from apps.comptes.utils import is_validation_personnel_active
+        if not user:
+            raise AuthenticationFailed(detail="Le compte associé à ce jeton n'existe plus.")
 
-            if user.statut_validation == StatutValidation.EN_ATTENTE:
-                if is_validation_personnel_active():
-                    raise CompteNonValideException(
-                        message="Votre compte attend la validation d'un administrateur.",
-                        details={"statut_validation": "en_attente"}
-                    )
+        from apps.comptes.utils import is_validation_personnel_active
 
-            if user.statut_validation == StatutValidation.REFUSE:
+        if user.statut_validation == StatutValidation.EN_ATTENTE:
+            if is_validation_personnel_active():
                 raise CompteNonValideException(
-                    message="Votre demande d'accès a été refusée.",
-                    details={"statut_validation": "refuse"}
+                    message="Votre compte attend la validation d'un administrateur.",
+                    details={"statut_validation": "en_attente"}
                 )
 
-            if not user.actif:
-                raise CompteNonValideException(
-                    message="Ce compte est désactivé.",
-                    details={"actif": False}
-                )
+        if user.statut_validation == StatutValidation.REFUSE:
+            raise CompteNonValideException(
+                message="Votre demande d'accès a été refusée.",
+                details={"statut_validation": "refuse"}
+            )
 
-        # Générer nouveau access token
-        return {
-            'access': str(refresh.access_token),
-        }
+        if not user.actif:
+            raise CompteNonValideException(
+                message="Ce compte est désactivé.",
+                details={"actif": False}
+            )
+
+        data = {'access': str(refresh.access_token)}
+        from rest_framework_simplejwt.settings import api_settings
+        if api_settings.ROTATE_REFRESH_TOKENS:
+            if api_settings.BLACKLIST_AFTER_ROTATION:
+                refresh.blacklist()
+            refresh.set_jti()
+            refresh.set_exp()
+            refresh.set_iat()
+            data['refresh'] = str(refresh)
+        return data
+
+
+class TokenRevokeSerializer(serializers.Serializer):
+    """Révoque un refresh token appartenant à l'utilisateur authentifié."""
+    refresh = serializers.CharField()
+
+    def validate(self, attrs):
+        from rest_framework_simplejwt.tokens import RefreshToken
+        from rest_framework_simplejwt.exceptions import TokenError
+
+        try:
+            token = RefreshToken(attrs['refresh'])
+        except TokenError as exc:
+            raise AuthenticationFailed(detail="Le jeton de renouvellement est invalide ou révoqué.") from exc
+
+        request = self.context['request']
+        if str(token.payload.get('user_id')) != str(request.user.id):
+            raise AuthenticationFailed(detail="Ce jeton n'appartient pas à l'utilisateur connecté.")
+
+        token.blacklist()
+        return {}

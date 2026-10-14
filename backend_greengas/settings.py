@@ -58,6 +58,7 @@ INSTALLED_APPS = [
 
     # Bibliothèques tierces
     'rest_framework',
+    'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
 
     # Applications GREENGAS
@@ -225,12 +226,12 @@ REST_FRAMEWORK = {
     'EXCEPTION_HANDLER': 'apps.comptes.exceptions.custom_exception_handler',
 }
 
-# Configuration SimpleJWT (accès 60 min, refresh 7 jours)
+# Configuration SimpleJWT (accès court, refresh rotatif et révocable)
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
-    'ROTATE_REFRESH_TOKENS': False,
-    'BLACKLIST_AFTER_ROTATION': False,
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
     'AUTH_HEADER_TYPES': ('Bearer',),
     'USER_ID_FIELD': 'id',
     'USER_ID_CLAIM': 'user_id',
