@@ -107,20 +107,26 @@ pip install -r ..\requirements.txt
 
 ### 4. Appliquer les migrations
 ```bash
-python manage.py makemigrations
 python manage.py migrate
 ```
 
-### 5. Charger les données de démo officielles
+### 5. Créer un administrateur (si non existant)
 ```bash
-python manage.py seed_data
+python manage.py createsuperuser
 ```
 
-### 6. Lancer le serveur de développement
+### 6. Lancer l'ensemble des tests automatisés (37 tests)
+```bash
+python manage.py test apps.comptes.tests apps.referentiel.tests apps.collecte.tests apps.tri.tests apps.greenpoints.tests apps.energie.tests apps.supervision.tests apps.simulateur.tests
+```
+
+### 7. Lancer le serveur de développement
 ```bash
 python manage.py runserver
 ```
-Le serveur est accessible sur : `http://localhost:8000/api/v1/`
+Le serveur API est accessible sur : `http://localhost:8000/api/v1/`  
+Le dashboard d'administration Jazzmin est sur : `http://localhost:8000/greengas/`
+
 
 ---
 

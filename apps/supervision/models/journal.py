@@ -5,10 +5,12 @@ from django.db import models
 class TypeObjet(models.TextChoices):
     UTILISATEUR = 'utilisateur', 'Utilisateur'
     BAC = 'bac', 'Bac'
+    SCAN = 'scan', 'Scan'
     SECTEUR = 'secteur', 'Secteur'
     SITE = 'site', 'Site'
     TOURNEE = 'tournee', 'Tournée'
     COLLECTE = 'collecte', 'Collecte'
+    LOT = 'lot', 'Lot'
     LOT_TRIE = 'lot_trie', 'Lot trié'
     TRANSACTION = 'transaction', 'Transaction GreenPoints'
     RECOMPENSE = 'recompense', 'Récompense'

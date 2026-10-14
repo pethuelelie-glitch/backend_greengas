@@ -1,22 +1,17 @@
-"""
-URL configuration for backend_greengas project.
-
-The `urlpatterns` list routes URLs to views. For more information please see:
-    https://docs.djangoproject.com/en/5.2/topics/http/urls/
-Examples:
-Function views
-    1. Add an import:  from my_app import views
-    2. Add a URL to urlpatterns:  path('', views.home, name='home')
-Class-based views
-    1. Add an import:  from other_app.views import Home
-    2. Add a URL to urlpatterns:  path('', Home.as_view(), name='home')
-Including another URLconf
-    1. Import the include() function: from django.urls import include, path
-    2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
-"""
 from django.contrib import admin
-from django.urls import path
+from django.urls import path, include
 
 urlpatterns = [
+    # Dashboard Admin
     path('greengas/', admin.site.urls),
+
+    # API REST v1
+    path('api/v1/', include('apps.comptes.urls')),
+    path('api/v1/', include('apps.referentiel.urls')),
+    path('api/v1/', include('apps.collecte.urls')),
+    path('api/v1/', include('apps.tri.urls')),
+    path('api/v1/', include('apps.greenpoints.urls')),
+    path('api/v1/', include('apps.energie.urls')),
+    path('api/v1/', include('apps.supervision.urls')),
+    path('api/v1/', include('apps.simulateur.urls')),
 ]

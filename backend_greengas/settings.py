@@ -25,7 +25,7 @@ SECRET_KEY = 'django-insecure-@%p__^*gu-@a70+ucm#c)a!vymu=g1$p_f=w+(@8jm4_drhs3y
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']
 
 
 # Application definition
@@ -146,6 +146,7 @@ REST_FRAMEWORK = {
     ),
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 50,
+    'EXCEPTION_HANDLER': 'apps.comptes.exceptions.custom_exception_handler',
 }
 
 # Configuration SimpleJWT (accès 60 min, refresh 7 jours)
@@ -193,6 +194,7 @@ JAZZMIN_SETTINGS = {
         "greenpoints",
         "energie",
         "supervision",
+        "simulateur",
     ],
     "icons": {
         "auth": "fas fa-users-cog",
@@ -211,7 +213,9 @@ JAZZMIN_SETTINGS = {
         "energie.Alerte": "fas fa-exclamation-triangle",
         "supervision.Parametre": "fas fa-sliders-h",
         "supervision.JournalAudit": "fas fa-history",
+        "simulateur.ScenarioSimulation": "fas fa-flask",
     },
+
     "default_icon_parents": "fas fa-chevron-circle-right",
     "default_icon_children": "fas fa-circle",
     "related_modal_active": True,

@@ -1,0 +1,94 @@
+from rest_framework.views import exception_handler
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.exceptions import APIException, ValidationError, NotAuthenticated, PermissionDenied, NotFound
+
+
+class MetierException(APIException):
+    """Exception pour violation d'une règle métier (HTTP 422 par défaut)"""
+    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+    code = "REGLE_METIER"
+    message = "Règle métier non respectée"
+
+    def __init__(self, code="REGLE_METIER", message="Règle métier non respectée", details=None, status_code=None):
+        self.code = code
+        self.message = message
+        self.details = details or {}
+        if status_code is not None:
+            self.status_code = status_code
+        super().__init__(detail=self.message, code=self.code)
+
+
+class ConflitException(APIException):
+    """Exception pour état de conflit ou doublon (HTTP 409)"""
+    status_code = status.HTTP_409_CONFLICT
+    code = "CONFLIT"
+    message = "Conflit avec l'état actuel"
+
+    def __init__(self, code="CONFLIT", message="Conflit avec l'état actuel", details=None):
+        self.code = code
+        self.message = message
+        self.details = details or {}
+        super().__init__(detail=self.message, code=self.code)
+
+
+def custom_exception_handler(exc, context):
+    """
+    Gestionnaire universel d'exceptions conforme au contrat commun GREENGAS :
+    { "code": "CODE_ERREUR", "message": "Message explicatif", "details": { ... } }
+    """
+    response = exception_handler(exc, context)
+
+    if response is not None:
+        code = "ERREUR"
+        message = str(exc)
+        details = {}
+
+        if isinstance(exc, ValidationError):
+            code = "VALIDATION"
+            message = "Les données transmises sont invalides ou incomplètes"
+            details = response.data
+        elif isinstance(exc, NotAuthenticated):
+            code = "NON_AUTHENTIFIE"
+            message = "Authentification requise pour accéder à cette ressource"
+        elif isinstance(exc, PermissionDenied):
+            code = "ACCES_REFUSE"
+            message = "Vous ne disposez pas des autorisations nécessaires"
+        elif isinstance(exc, NotFound):
+            code = "INTROUVABLE"
+            message = "La ressource demandée n'existe pas"
+        elif hasattr(exc, 'get_codes'):
+            error_codes = exc.get_codes()
+            if isinstance(error_codes, str):
+                code = error_codes.upper()
+            elif isinstance(error_codes, dict):
+                code = "VALIDATION"
+                details = error_codes
+
+        # Si l'exception définit explicitement code, message ou details
+        if hasattr(exc, 'code'):
+            code = getattr(exc, 'code')
+        if hasattr(exc, 'message'):
+            message = getattr(exc, 'message')
+        elif hasattr(exc, 'detail') and isinstance(exc.detail, str):
+            message = exc.detail
+        if hasattr(exc, 'details') and getattr(exc, 'details'):
+            details = getattr(exc, 'details')
+
+        response.data = {
+            "code": code,
+            "message": message,
+            "details": details if details else (response.data if isinstance(response.data, dict) and 'detail' not in response.data else {})
+        }
+    else:
+        # Erreur 500 inattendue
+        response = Response(
+            {
+                "code": "ERREUR_SERVEUR",
+                "message": "Une erreur interne est survenue sur le serveur",
+                "details": {"erreur": str(exc)}
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+    return response
