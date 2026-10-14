@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: GREENGAS API
-  version: 1.1.0
+  version: 1.3.0
   description: |
     Contrat d'API commun de GREENGAS (SIREXE Hackathon 2026, équipe DEDSEC).
     Ce fichier fait foi pour le backend Django, l'application Flutter et le Control Center (React / Electron).
@@ -42,7 +42,11 @@ paths:
     post:
       operationId: auth_inscription
       tags: [Auth]
-      summary: Inscription d'un citoyen (envoie un code OTP par SMS)
+      summary: Inscription d'un citoyen (compte actif aussitôt, connecté)
+      description: |
+        Depuis 1.3.0 : pas de code SMS ni de validation par un référent. Le compte est créé avec
+        statut_validation = valide et telephone_verifie = true, et les jetons sont renvoyés comme à la connexion.
+        Le rôle est toujours fixé à citoyen par le serveur.
       security: []
       requestBody:
         required: true
@@ -51,10 +55,10 @@ paths:
             schema: { $ref: '#/components/schemas/InscriptionRequete' }
       responses:
         '201':
-          description: Compte créé, statut_validation = en_attente, OTP envoyé
+          description: Compte créé et actif, jetons émis
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Utilisateur' }
+              schema: { $ref: '#/components/schemas/Jetons' }
         '400': { $ref: '#/components/responses/Validation' }
         '404': { $ref: '#/components/responses/Introuvable' }
         '409': { $ref: '#/components/responses/Conflit' }
@@ -63,6 +67,8 @@ paths:
       operationId: auth_otp_verifier
       tags: [Auth]
       summary: Vérifier le code OTP reçu par SMS
+      deprecated: true
+      description: Non utilisé depuis 1.3.0 (inscription sans code SMS). Gardé pour une future vérification du téléphone ; le backend peut ne pas l'implémenter.
       security: []
       requestBody:
         required: true
@@ -82,6 +88,8 @@ paths:
       operationId: auth_otp_renvoyer
       tags: [Auth]
       summary: Renvoyer un code OTP
+      deprecated: true
+      description: Non utilisé depuis 1.3.0 (inscription sans code SMS). Gardé pour une future vérification du téléphone ; le backend peut ne pas l'implémenter.
       security: []
       requestBody:
         required: true
@@ -101,7 +109,11 @@ paths:
       tags: [Auth]
       summary: Inscription d'un opérateur de tri ou d'un responsable méthanisation (Control Center)
       description: |
-        Le compte est créé actif et l'utilisateur est connecté aussitôt (mêmes jetons que /auth/token/).
+        Depuis 1.3.0 : le compte est créé avec statut_validation = en_attente et AUCUN jeton n'est émis.
+        L'utilisateur ne peut pas se connecter (403 COMPTE_NON_VALIDE) tant qu'un administrateur n'a pas
+        validé le compte avec POST /utilisateurs/{id}/validation/.
+        Téléphone et e-mail sont obligatoires ; chacun est unique (409 TELEPHONE_DEJA_UTILISE ou
+        EMAIL_DEJA_UTILISE). L'e-mail est enregistré en minuscules.
         Seuls les rôles operateur_tri et responsable_methanisation sont acceptés ; tout autre rôle
         renvoie une erreur VALIDATION. Les administrateurs, référents et collecteurs restent préenregistrés
         ou créés par un administrateur (POST /utilisateurs/).
@@ -113,10 +125,10 @@ paths:
             schema: { $ref: '#/components/schemas/InscriptionPersonnelRequete' }
       responses:
         '201':
-          description: Compte créé et actif, jetons émis
+          description: Demande enregistrée, en attente de validation par un administrateur
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Jetons' }
+              schema: { $ref: '#/components/schemas/Utilisateur' }
         '400': { $ref: '#/components/responses/Validation' }
         '409': { $ref: '#/components/responses/Conflit' }
   /auth/token/:
@@ -124,6 +136,11 @@ paths:
       operationId: auth_token
       tags: [Auth]
       summary: Connexion (tous les rôles) — obtenir les jetons JWT
+      description: |
+        Identifiant au choix : téléphone ou e-mail (exactement un des deux, sinon 400 VALIDATION).
+        L'e-mail est comparé sans tenir compte des majuscules. Identifiant inconnu ou mauvais mot de passe : 401.
+        Compte du personnel en attente ou refusé, ou compte désactivé (actif = false) : 403 COMPTE_NON_VALIDE,
+        avec details.statut_validation (en_attente, refuse) ou details.actif = false. Le mot de passe est vérifié avant.
       security: []
       requestBody:
         required: true
@@ -137,6 +154,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Jetons' }
         '401': { $ref: '#/components/responses/NonAuthentifie' }
+        '403': { $ref: '#/components/responses/AccesRefuse' }
   /auth/token/rafraichir/:
     post:
       operationId: auth_token_rafraichir
@@ -247,12 +265,17 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Utilisateur' }
         '400': { $ref: '#/components/responses/Validation' }
+        '409': { $ref: '#/components/responses/Conflit' }
   /utilisateurs/{id}/validation/:
     parameters: [{ $ref: '#/components/parameters/Id' }]
     post:
       operationId: utilisateurs_valider
       tags: [Utilisateurs]
-      summary: Valider ou refuser un compte citoyen (référent, administrateur) — journalisé
+      summary: Valider ou refuser un compte du personnel en attente (administrateur seulement) — journalisé
+      description: |
+        Depuis 1.3.0, seuls les comptes operateur_tri et responsable_methanisation inscrits eux-mêmes
+        passent par cette validation. Un compte qui n'est pas en_attente renvoie 409 CONFLIT ; un autre rôle que
+        administrateur reçoit 403 ACCES_REFUSE. Refuser laisse le compte refusé (connexion impossible).
       requestBody:
         required: true
         content:
@@ -269,7 +292,8 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Utilisateur' }
-        '422': { $ref: '#/components/responses/RegleMetier' }
+        '403': { $ref: '#/components/responses/AccesRefuse' }
+        '409': { $ref: '#/components/responses/Conflit' }
 
   # ------------------------------------------------------------- RÉFÉRENTIEL
   /secteurs/:
@@ -489,7 +513,7 @@ paths:
       description: |
         Le serveur renvoie toujours le scan enregistré avec son statut ; seuls `valide` et `non_localise` comptent.
         Un second scan dans les 10 secondes est un doublon : réponse 200 avec le scan existant.
-        Un compte non validé reçoit 422 COMPTE_NON_VALIDE.
+        Un compte désactivé (actif = false) reçoit 422 COMPTE_NON_VALIDE.
       requestBody:
         required: true
         content:
@@ -1038,7 +1062,7 @@ paths:
     get:
       operationId: verifications_lister
       tags: [Supervision]
-      summary: File de vérification (administrateur ; référent = sa résidence)
+      summary: File de vérification (administrateur ; référent = sa résidence, sans les comptes en attente)
       parameters:
         - { name: type, in: query, schema: { $ref: '#/components/schemas/TypeVerification' } }
       responses:
@@ -1243,6 +1267,7 @@ components:
         - INTROUVABLE
         - CONFLIT
         - TELEPHONE_DEJA_UTILISE
+        - EMAIL_DEJA_UTILISE
         - OTP_INVALIDE
         - OTP_EXPIRE
         - COMPTE_NON_VALIDE
@@ -1310,7 +1335,10 @@ components:
       type: string
       enum: [mesure, estime, simule]
       description: Badge affiché à côté de chaque indicateur (CDC §7)
-    TypeVerification: { type: string, enum: [collecte_a_verifier, compte_en_attente, scan_hors_zone, scan_non_localise, bac_surinscrit] }
+    TypeVerification:
+      type: string
+      enum: [collecte_a_verifier, compte_en_attente, scan_hors_zone, scan_non_localise, bac_surinscrit]
+      description: "compte_en_attente = compte du personnel qui attend un administrateur (1.3.0 ; plus de citoyens). bac_surinscrit reste un signal : il ne bloque aucun compte."
     TypeObjet: { type: string, enum: [utilisateur, bac, scan, tournee, collecte, lot, transaction, production, alerte, parametre, site, secteur] }
     StatutParametre: { type: string, enum: [aligne, illustratif, a_sourcer, a_calibrer, v2] }
     CleParametre:
@@ -1346,14 +1374,17 @@ components:
     # --------------------------------------------------------- UTILISATEURS
     Utilisateur:
       type: object
-      required: [id, nom, telephone, role, actif, date_creation, profil_citoyen]
+      required: [id, nom, telephone, role, actif, statut_validation, date_creation, profil_citoyen]
       properties:
         id: { type: string, format: uuid, readOnly: true, example: a0000000-0000-4000-8000-000000000101 }
         nom: { type: string, example: Awa Koné }
         telephone: { $ref: '#/components/schemas/Telephone' }
-        email: { type: string, format: email, nullable: true, example: null }
+        email: { type: string, format: email, nullable: true, description: 'Unique quand il est renseigné ; sert aussi d’identifiant de connexion', example: null }
         role: { $ref: '#/components/schemas/Role' }
         actif: { type: boolean, example: true }
+        statut_validation:
+          description: "État du compte (1.3.0). valide pour tous les comptes, sauf le personnel inscrit lui-même : en_attente jusqu'à la décision d'un administrateur, puis valide ou refuse."
+          allOf: [{ $ref: '#/components/schemas/StatutValidation' }]
         date_creation: { $ref: '#/components/schemas/DateHeure' }
         profil_citoyen:
           description: Renseigné uniquement si role = citoyen, sinon null
@@ -1366,8 +1397,10 @@ components:
       properties:
         bac_id: { type: string, format: uuid, example: bac00000-0000-4000-8000-000000000014 }
         code_bac: { type: string, readOnly: true, example: BAC-014 }
-        telephone_verifie: { type: boolean, readOnly: true, example: true }
-        statut_validation: { $ref: '#/components/schemas/StatutValidation' }
+        telephone_verifie: { type: boolean, readOnly: true, example: true, description: Toujours true depuis 1.3.0 (pas de code SMS) }
+        statut_validation:
+          description: Toujours valide depuis 1.3.0 (gardé pour compatibilité ; l'état du compte est Utilisateur.statut_validation)
+          allOf: [{ $ref: '#/components/schemas/StatutValidation' }]
         date_inscription: { $ref: '#/components/schemas/DateHeure' }
     InscriptionRequete:
       type: object
@@ -1379,10 +1412,11 @@ components:
         code_bac: { type: string, example: BAC-014 }
     InscriptionPersonnelRequete:
       type: object
-      required: [nom, telephone, mot_de_passe, role]
+      required: [nom, telephone, email, mot_de_passe, role]
       properties:
         nom: { type: string, example: Aya Opératrice }
         telephone: { $ref: '#/components/schemas/Telephone' }
+        email: { type: string, format: email, example: aya.operatrice@greengas.ci }
         mot_de_passe: { type: string, format: password, minLength: 8, example: greengas2026 }
         role:
           type: string
@@ -1396,9 +1430,11 @@ components:
         code: { type: string, pattern: '^[0-9]{6}$', example: '123456' }
     ConnexionRequete:
       type: object
-      required: [telephone, mot_de_passe]
+      description: Identifiant au choix, téléphone ou e-mail (exactement un des deux).
+      required: [mot_de_passe]
       properties:
         telephone: { $ref: '#/components/schemas/Telephone' }
+        email: { type: string, format: email, example: aya.operatrice@greengas.ci }
         mot_de_passe: { type: string, format: password, example: greengas2026 }
     Jetons:
       type: object
@@ -1640,7 +1676,7 @@ components:
       type: object
       required: [citoyen_id, solde, points_en_attente, total_gagne, total_echange]
       properties:
-        citoyen_id: { type: string, format: uuid, example: a0000000-0000-4000-8000-000000000101 }
+        citoyen_id: { type: string, format: uuid, example: a0000000-0000-4000-8000-000000000001 }
         solde: { type: integer, description: total_gagne − total_echange (transactions créditées uniquement), example: 105 }
         points_en_attente: { type: integer, example: 0 }
         total_gagne: { type: integer, example: 105 }
@@ -1668,7 +1704,7 @@ components:
       required: [id, citoyen_id, recompense_id, nom_recompense, cout_points, date]
       properties:
         id: { type: string, format: uuid, readOnly: true, example: ec000000-0000-4000-8000-000000000001 }
-        citoyen_id: { type: string, format: uuid, example: a0000000-0000-4000-8000-000000000101 }
+        citoyen_id: { type: string, format: uuid, example: a0000000-0000-4000-8000-000000000001 }
         recompense_id: { type: string, format: uuid, example: 7ec00000-0000-4000-8000-000000000001 }
         nom_recompense: { type: string, example: Forfait internet 1 Go }
         cout_points: { type: integer, description: Coût figé au moment de l'échange, example: 100 }

@@ -54,33 +54,14 @@ class MoiView(APIView):
 
 class InscriptionCitoyenView(APIView):
     """
-    POST /api/v1/auth/inscription/
-    Inscription citoyen libre et envoi d'un code OTP par SMS.
+    POST /api/v1/auth/inscription/ — OpenAPI 1.3.0
+    Inscription citoyen libre. Compte actif aussitôt et connecté (renvoie les Jetons 201).
+    Pas de SMS OTP ni de validation référent requis.
     """
     permission_classes = [AllowAny]
 
     def post(self, request):
         serializer = InscriptionCitoyenSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        utilisateur = serializer.save()
-
-        return Response(
-            UtilisateurSerializer(utilisateur).data,
-            status=status.HTTP_201_CREATED
-        )
-
-
-class InscriptionPersonnelView(APIView):
-    """
-    POST /api/v1/auth/inscription/personnel/
-    Inscription d'un opérateur de tri ou d'un responsable méthanisation (Control Center).
-    Contrat 1.1.0 — Renvoie statut 201 avec les Jetons (access, refresh, utilisateur).
-    """
-    permission_classes = [AllowAny]
-
-    def post(self, request):
-        from apps.comptes.serializers import InscriptionPersonnelSerializer
-        serializer = InscriptionPersonnelSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         utilisateur = serializer.save()
 
@@ -94,6 +75,27 @@ class InscriptionPersonnelView(APIView):
             "refresh": str(refresh),
             "utilisateur": UtilisateurSerializer(utilisateur).data
         }, status=status.HTTP_201_CREATED)
+
+
+class InscriptionPersonnelView(APIView):
+    """
+    POST /api/v1/auth/inscription/personnel/ — OpenAPI 1.3.0
+    Inscription d'un opérateur de tri ou d'un responsable méthanisation (Control Center).
+    Le compte est créé avec statut_validation = en_attente et AUCUN jeton n'est émis.
+    Renvoie 201 avec le profil Utilisateur en attente de validation admin.
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        from apps.comptes.serializers import InscriptionPersonnelSerializer
+        serializer = InscriptionPersonnelSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        utilisateur = serializer.save()
+
+        return Response(
+            UtilisateurSerializer(utilisateur).data,
+            status=status.HTTP_201_CREATED
+        )
 
 
 class OtpVerifierView(APIView):

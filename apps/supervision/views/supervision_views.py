@@ -81,14 +81,12 @@ class VerificationQueueView(APIView):
                     'date': d,
                 })
 
-        # 2. Comptes en attente (compte_en_attente)
-        if not type_filter or type_filter == 'compte_en_attente':
+        # 2. Comptes en attente (compte_en_attente) — Personnel en attente, Admin uniquement (OpenAPI 1.3.0)
+        if not is_referent and (not type_filter or type_filter == 'compte_en_attente'):
             comptes_qs = Utilisateur.objects.filter(
-                role=Role.CITOYEN,
+                role__in=[Role.OPERATEUR_TRI, Role.RESPONSABLE_METHANISATION],
                 statut_validation=StatutValidation.EN_ATTENTE
-            ).select_related('bac')
-            if is_referent:
-                comptes_qs = comptes_qs.filter(bac=ref_bac) if ref_bac else comptes_qs.none()
+            )
 
             for u in comptes_qs:
                 d = u.date_inscription or u.date_creation
@@ -96,12 +94,12 @@ class VerificationQueueView(APIView):
                     'type': 'compte_en_attente',
                     'objet_type': TypeObjet.UTILISATEUR,
                     'objet_id': str(u.id),
-                    'libelle': f"{u.nom} ({u.telephone}) — En attente de validation",
+                    'libelle': f"{u.nom} ({u.telephone}) — Personnel {u.role} en attente de validation",
                     'details': {
                         'telephone': u.telephone,
+                        'email': u.email,
                         'nom': u.nom,
-                        'bac_code': u.bac.code if u.bac else None,
-                        'residence': u.bac.residence if u.bac else None,
+                        'role': u.role,
                     },
                     'date': d,
                 })

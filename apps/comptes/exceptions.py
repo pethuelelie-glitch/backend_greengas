@@ -32,6 +32,29 @@ class ConflitException(APIException):
         super().__init__(detail=self.message, code=self.code)
 
 
+class CompteNonValideException(APIException):
+    """Exception pour compte en attente de validation ou inactif (HTTP 403)"""
+    status_code = status.HTTP_403_FORBIDDEN
+    code = "COMPTE_NON_VALIDE"
+    message = "Compte non validé ou inactif"
+
+    def __init__(self, message="Compte non validé ou inactif", details=None):
+        self.code = "COMPTE_NON_VALIDE"
+        self.message = message
+        self.details = details or {}
+        super().__init__(detail=self.message, code=self.code)
+
+
+class TelephoneDejaUtiliseException(ConflitException):
+    def __init__(self, details=None):
+        super().__init__(code="TELEPHONE_DEJA_UTILISE", message="Ce numéro de téléphone est déjà associé à un compte", details=details)
+
+
+class EmailDejaUtiliseException(ConflitException):
+    def __init__(self, details=None):
+        super().__init__(code="EMAIL_DEJA_UTILISE", message="Cette adresse e-mail est déjà associée à un compte", details=details)
+
+
 def custom_exception_handler(exc, context):
     """
     Gestionnaire universel d'exceptions conforme au contrat commun GREENGAS :

@@ -1,10 +1,16 @@
 import re
 import json
 from rest_framework import serializers
-from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework.exceptions import AuthenticationFailed
 from django.contrib.auth import authenticate
 from apps.comptes.models import Utilisateur, Role, StatutValidation, CodeOTP
-from apps.comptes.exceptions import ConflitException, MetierException
+from apps.comptes.exceptions import (
+    ConflitException,
+    MetierException,
+    CompteNonValideException,
+    TelephoneDejaUtiliseException,
+    EmailDejaUtiliseException,
+)
 from apps.referentiel.models import Bac
 
 
@@ -27,7 +33,7 @@ class UtilisateurSerializer(serializers.ModelSerializer):
         model = Utilisateur
         fields = [
             'id', 'nom', 'telephone', 'email', 'role',
-            'actif', 'date_creation', 'profil_citoyen'
+            'actif', 'statut_validation', 'date_creation', 'profil_citoyen'
         ]
         read_only_fields = ['id', 'date_creation']
 
@@ -39,39 +45,75 @@ class UtilisateurSerializer(serializers.ModelSerializer):
 
 class ConnexionSerializer(serializers.Serializer):
     """
-    Connexion par numéro de téléphone et mot de passe.
-    Supporte à la fois 'mot_de_passe' et 'password'.
+    POST /api/v1/auth/token/ — OpenAPI 1.3.0
+    Identifiant au choix : téléphone ou e-mail (exactement un des deux, sinon 400 VALIDATION).
+    L'e-mail est comparé sans tenir compte des majuscules.
+    Identifiant inconnu ou mauvais mot de passe : 401 NON_AUTHENTIFIE.
+    Compte du personnel en attente ou refusé, ou compte désactivé (actif = false) :
+    403 COMPTE_NON_VALIDE, avec details.statut_validation ou details.actif = false.
+    Le mot de passe est vérifié avant.
     """
-    telephone = serializers.CharField(required=True)
+    telephone = serializers.CharField(required=False, allow_null=True)
+    email = serializers.EmailField(required=False, allow_null=True)
     mot_de_passe = serializers.CharField(required=False, write_only=True)
     password = serializers.CharField(required=False, write_only=True)
 
     def validate(self, attrs):
         telephone = attrs.get('telephone')
+        email = attrs.get('email')
         password = attrs.get('mot_de_passe') or attrs.get('password')
 
         if not password:
             raise serializers.ValidationError({"mot_de_passe": ["Le mot de passe est obligatoire."]})
 
-        user = authenticate(username=telephone, password=password)
-        if not user:
-            # Fallback direct lookup
-            u = Utilisateur.objects.filter(telephone=telephone).first()
-            if u and u.check_password(password):
-                user = u
+        has_tel = bool(telephone and str(telephone).strip())
+        has_email = bool(email and str(email).strip())
 
-        if not user:
-            raise serializers.ValidationError({"non_field_errors": ["Numéro de téléphone ou mot de passe incorrect."]})
+        # Exactement un des deux
+        if (has_tel and has_email) or (not has_tel and not has_email):
+            raise serializers.ValidationError(
+                {"identifiant": ["Vous devez fournir exactement un identifiant : téléphone ou e-mail."]}
+            )
 
+        user = None
+        if has_tel:
+            tel_clean = str(telephone).strip()
+            user = Utilisateur.objects.filter(telephone=tel_clean).first()
+        elif has_email:
+            email_clean = str(email).strip().lower()
+            user = Utilisateur.objects.filter(email__iexact=email_clean).first()
+
+        # Vérifier l'existence et le mot de passe -> 401 si mauvais
+        if not user or not user.check_password(password):
+            raise AuthenticationFailed(detail="Identifiant ou mot de passe incorrect.")
+
+        # Le mot de passe est vérifié avant. Vérification statut d'activation / validation :
         if not user.actif:
-            raise serializers.ValidationError({"non_field_errors": ["Ce compte a été désactivé."]})
+            raise CompteNonValideException(
+                message="Ce compte a été désactivé.",
+                details={"actif": False}
+            )
+
+        # Personnel en attente ou refusé -> 403 COMPTE_NON_VALIDE
+        if user.role in [Role.OPERATEUR_TRI, Role.RESPONSABLE_METHANISATION]:
+            if user.statut_validation in [StatutValidation.EN_ATTENTE, StatutValidation.REFUSE]:
+                raise CompteNonValideException(
+                    message=f"Compte personnel {user.statut_validation}.",
+                    details={"statut_validation": user.statut_validation}
+                )
 
         attrs['user'] = user
         return attrs
 
 
 class InscriptionCitoyenSerializer(serializers.Serializer):
-    """Inscription citoyen (envoie un code OTP par SMS)"""
+    """
+    POST /api/v1/auth/inscription/ — OpenAPI 1.3.0
+    Depuis 1.3.0 : pas de code SMS ni de validation par un référent.
+    Le compte est créé avec statut_validation = valide et telephone_verifie = true.
+    Les jetons sont renvoyés comme à la connexion (201 Jetons).
+    Le rôle est toujours fixé à citoyen par le serveur.
+    """
     nom = serializers.CharField(max_length=150, required=True)
     telephone = serializers.CharField(max_length=20, required=True)
     mot_de_passe = serializers.CharField(min_length=8, write_only=True, required=True)
@@ -81,9 +123,7 @@ class InscriptionCitoyenSerializer(serializers.Serializer):
         if not re.match(TELEPHONE_REGEX, value):
             raise serializers.ValidationError("Le numéro de téléphone doit respecter le format international (+225 suivi de 10 chiffres).")
         if Utilisateur.objects.filter(telephone=value).exists():
-            raise ConflitException(
-                code="TELEPHONE_DEJA_UTILISE",
-                message="Ce numéro de téléphone est déjà associé à un compte",
+            raise TelephoneDejaUtiliseException(
                 details={"telephone": ["Ce numéro de téléphone est déjà utilisé."]}
             )
         return value
@@ -103,21 +143,25 @@ class InscriptionCitoyenSerializer(serializers.Serializer):
             password=validated_data['mot_de_passe'],
             role=Role.CITOYEN,
             bac=bac,
-            statut_validation=StatutValidation.EN_ATTENTE,
-            telephone_verifie=False
+            statut_validation=StatutValidation.VALIDE,
+            telephone_verifie=True,
+            actif=True
         )
-        # Génération du code OTP
-        CodeOTP.generer_code(utilisateur.telephone)
         return utilisateur
 
 
 class InscriptionPersonnelSerializer(serializers.Serializer):
     """
-    Inscription d'un opérateur de tri ou d'un responsable méthanisation (Control Center).
-    Contrat 1.1.0 — Créé actif immédiatement, émet des jetons JWT.
+    POST /api/v1/auth/inscription/personnel/ — OpenAPI 1.3.0
+    Depuis 1.3.0 : le compte est créé avec statut_validation = en_attente et AUCUN jeton n'est émis.
+    L'utilisateur ne peut pas se connecter (403 COMPTE_NON_VALIDE) tant qu'un administrateur n'a pas validé.
+    Téléphone et e-mail sont obligatoires ; chacun est unique (409 TELEPHONE_DEJA_UTILISE ou EMAIL_DEJA_UTILISE).
+    L'e-mail est enregistré en minuscules.
+    Seuls les rôles operateur_tri et responsable_methanisation sont acceptés.
     """
     nom = serializers.CharField(max_length=150, required=True)
     telephone = serializers.CharField(max_length=20, required=True)
+    email = serializers.EmailField(required=True)
     mot_de_passe = serializers.CharField(min_length=8, write_only=True, required=True)
     role = serializers.CharField(max_length=30, required=True)
 
@@ -125,12 +169,18 @@ class InscriptionPersonnelSerializer(serializers.Serializer):
         if not re.match(TELEPHONE_REGEX, value):
             raise serializers.ValidationError("Le numéro de téléphone doit respecter le format international (+225 suivi de 10 chiffres).")
         if Utilisateur.objects.filter(telephone=value).exists():
-            raise ConflitException(
-                code="TELEPHONE_DEJA_UTILISE",
-                message="Ce numéro de téléphone est déjà associé à un compte",
+            raise TelephoneDejaUtiliseException(
                 details={"telephone": ["Ce numéro de téléphone est déjà utilisé."]}
             )
         return value
+
+    def validate_email(self, value):
+        email_clean = value.strip().lower()
+        if Utilisateur.objects.filter(email__iexact=email_clean).exists():
+            raise EmailDejaUtiliseException(
+                details={"email": ["Cette adresse e-mail est déjà utilisée."]}
+            )
+        return email_clean
 
     def validate_role(self, value):
         roles_autorises = [Role.OPERATEUR_TRI, Role.RESPONSABLE_METHANISATION]
@@ -141,27 +191,31 @@ class InscriptionPersonnelSerializer(serializers.Serializer):
     def create(self, validated_data):
         utilisateur = Utilisateur.objects.create_user(
             telephone=validated_data['telephone'],
+            email=validated_data['email'].strip().lower(),
             nom=validated_data['nom'],
             password=validated_data['mot_de_passe'],
             role=validated_data['role'],
+            statut_validation=StatutValidation.EN_ATTENTE,
             actif=True,
             telephone_verifie=True
         )
 
-        # Journaliser l'inscription dans JournalAudit
+        # Journaliser la demande dans JournalAudit
         try:
             from apps.supervision.models import JournalAudit, TypeObjet
             JournalAudit.objects.create(
                 auteur=utilisateur,
-                action="utilisateur.inscrire",
+                action="utilisateur.demande_inscription",
                 objet_type=TypeObjet.UTILISATEUR,
                 objet_id=str(utilisateur.id),
                 nouvelle_valeur=json.dumps({
                     "nom": utilisateur.nom,
                     "telephone": utilisateur.telephone,
-                    "role": utilisateur.role
+                    "email": utilisateur.email,
+                    "role": utilisateur.role,
+                    "statut_validation": "en_attente"
                 }),
-                motif="Inscription personnel via Control Center"
+                motif="Demande d'inscription personnel en attente de validation admin"
             )
         except Exception:
             pass
@@ -193,4 +247,3 @@ class OtpVerificationSerializer(serializers.Serializer):
 
         attrs['otp'] = otp
         return attrs
-

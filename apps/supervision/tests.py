@@ -21,11 +21,12 @@ class SupervisionEndpointsTestCase(TestCase):
             password="password123",
             role=Role.ADMINISTRATEUR
         )
-        self.citoyen_attente = Utilisateur.objects.create_user(
+        self.personnel_attente = Utilisateur.objects.create_user(
             telephone="+2250100000002",
-            nom="Citoyen En Attente",
+            email="operateur@greengas.ci",
+            nom="Opérateur En Attente",
             password="password123",
-            role=Role.CITOYEN,
+            role=Role.OPERATEUR_TRI,
             statut_validation=StatutValidation.EN_ATTENTE
         )
         self.collecteur = Utilisateur.objects.create_user(
@@ -133,7 +134,7 @@ class SupervisionEndpointsTestCase(TestCase):
             auteur=self.admin,
             action="compte.valider",
             objet_type=TypeObjet.UTILISATEUR,
-            objet_id=str(self.citoyen_attente.id),
+            objet_id=str(self.personnel_attente.id),
             motif="Vérification physique effectuée"
         )
         res = self.client.get("/api/v1/journal/")
